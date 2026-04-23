@@ -27,7 +27,10 @@ if [ -z "$HERMES_DEFAULT_MODEL" ]; then
   elif [ -n "$GOOGLE_API_KEY" ] || [ -n "$GEMINI_API_KEY" ]; then
     export HERMES_DEFAULT_MODEL="gemini/gemini-2.5-pro"
   else
-    export HERMES_DEFAULT_MODEL="openai/gpt-4o"
+    # Use the bare model name (no provider prefix) so hermes routes to OpenAI
+    # directly via OPENAI_API_KEY.  The slash format "openai/gpt-4o" is the
+    # OpenRouter model-path convention and would be misrouted to OpenRouter.
+    export HERMES_DEFAULT_MODEL="gpt-4o"
   fi
   echo "HERMES_DEFAULT_MODEL auto-selected: $HERMES_DEFAULT_MODEL"
 fi
