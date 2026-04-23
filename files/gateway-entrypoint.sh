@@ -55,58 +55,6 @@ if [ -n "$OVERWRITE_CONFIG" ] || [ ! -e "${HERMES_HOME}/config.yaml" ]; then
   echo "config.yaml written"
 fi
 
-echo "==== Pre-seeding Pairing Approved Users ===="
-# Without a CLI, users can be pre-approved by setting
-# TELEGRAM_PAIRING_APPROVED_USERS (and equivalents for other platforms)
-# to a comma-separated list of user IDs.  The entrypoint writes them
-# directly into the persistent pairing store so the gateway sees them
-# as already paired on first start — no `hermes pairing approve` needed.
-_seed_pairing_users() {
-  platform="$1"; users="$2"
-  [ -z "$users" ] && return
-  /opt/hermes/.venv/bin/python3 - "$platform" "$users" <<'PYEOF'
-import sys, json, os, time
-from pathlib import Path
-
-platform   = sys.argv[1]
-users_csv  = sys.argv[2]
-hermes_home = os.environ.get("HERMES_HOME", "/opt/data")
-
-# Mirror get_hermes_dir("platforms/pairing", "pairing") resolution logic:
-# prefer the new path unless the old one exists and the new one does not.
-new_dir = Path(hermes_home) / "platforms" / "pairing"
-old_dir = Path(hermes_home) / "pairing"
-pairing_dir = old_dir if old_dir.exists() and not new_dir.exists() else new_dir
-pairing_dir.mkdir(parents=True, exist_ok=True)
-
-approved_path = pairing_dir / f"{platform}-approved.json"
-try:
-    approved = json.loads(approved_path.read_text(encoding="utf-8")) if approved_path.exists() else {}
-except Exception:
-    approved = {}
-
-changed = False
-for uid in users_csv.split(","):
-    uid = uid.strip()
-    if uid and uid not in approved:
-        approved[uid] = {"user_name": "", "approved_at": time.time()}
-        print(f"  Pre-approved {platform} user: {uid}")
-        changed = True
-
-if changed:
-    approved_path.write_text(json.dumps(approved, indent=2, ensure_ascii=False), encoding="utf-8")
-    try:
-        approved_path.chmod(0o600)
-    except OSError:
-        pass
-PYEOF
-}
-
-_seed_pairing_users "telegram" "$TELEGRAM_PAIRING_APPROVED_USERS"
-_seed_pairing_users "discord"  "$DISCORD_PAIRING_APPROVED_USERS"
-_seed_pairing_users "slack"    "$SLACK_PAIRING_APPROVED_USERS"
-_seed_pairing_users "whatsapp" "$WHATSAPP_PAIRING_APPROVED_USERS"
-
 echo "==== Redirecting PID and Lock Files to /tmp ===="
 # gateway.pid and gateway.lock must not live in the persistent volume — stale
 # files from a previous container would block startup.  Symlink them into /tmp

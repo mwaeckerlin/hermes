@@ -32,27 +32,15 @@ services:
       TELEGRAM_WEBHOOK_URL: ${TELEGRAM_WEBHOOK_URL:-}
       TELEGRAM_WEBHOOK_PORT: ${TELEGRAM_WEBHOOK_PORT:-}
       TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
-      # Pre-approve Telegram user IDs without CLI (comma-separated numeric IDs).
-      # When an unknown user contacts the bot they receive a pairing code and are
-      # told to ask the owner to run `hermes pairing approve telegram <code>`.
-      # Because this deployment has no CLI, list their Telegram user IDs here
-      # instead — the entrypoint writes them into the pairing store at startup.
-      TELEGRAM_PAIRING_APPROVED_USERS: ${TELEGRAM_PAIRING_APPROVED_USERS:-}
       # WhatsApp: set WHATSAPP_ENABLED=true and run `hermes whatsapp` to pair.
       WHATSAPP_ENABLED: ${WHATSAPP_ENABLED:-}
       WHATSAPP_ALLOWED_USERS: ${WHATSAPP_ALLOWED_USERS:-}
-      # Pre-approve WhatsApp user IDs without CLI (comma-separated).
-      WHATSAPP_PAIRING_APPROVED_USERS: ${WHATSAPP_PAIRING_APPROVED_USERS:-}
       # Discord: set DISCORD_BOT_TOKEN to enable.
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
-      # Pre-approve Discord user IDs without CLI (comma-separated).
-      DISCORD_PAIRING_APPROVED_USERS: ${DISCORD_PAIRING_APPROVED_USERS:-}
       # Slack: set both SLACK_BOT_TOKEN and SLACK_APP_TOKEN to enable.
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
       SLACK_APP_TOKEN: ${SLACK_APP_TOKEN:-}
       SLACK_ALLOWED_USERS: ${SLACK_ALLOWED_USERS:-}
-      # Pre-approve Slack user IDs without CLI (comma-separated).
-      SLACK_PAIRING_APPROVED_USERS: ${SLACK_PAIRING_APPROVED_USERS:-}
       # Gateway-wide open access (false = allowlist only)
       GATEWAY_ALLOW_ALL_USERS: ${GATEWAY_ALLOW_ALL_USERS:-false}
       # ── Tool API keys ────────────────────────────────────────────────────────
@@ -135,7 +123,10 @@ services:
       - gateway-sandbox
 
   hermes-dashboard:
-    image: nousresearch/hermes-agent:latest
+    image: mwaeckerlin/hermes:dashboard
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
     command: ["dashboard", "--host", "0.0.0.0", "--insecure"]
     depends_on:
       hermes-gateway:
