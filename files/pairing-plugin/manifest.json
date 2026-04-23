@@ -1,0 +1,13 @@
+{
+  "name": "pairing",
+  "label": "Pairing",
+  "description": "Approve or revoke user pairing requests for messaging platforms (Telegram, Discord, Slack, WhatsApp)",
+  "icon": "Shield",
+  "version": "1.0.0",
+  "tab": {
+    "path": "/pairing",
+    "position": "end"
+  },
+  "entry": "dist/index.js",
+  "api": "api.py"
+}

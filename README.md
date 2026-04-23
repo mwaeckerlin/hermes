@@ -227,6 +227,12 @@ Channels are enabled by setting the corresponding token. No explicit `enabled: t
 | `WHATSAPP_ALLOWED_USERS` | Comma-separated phone numbers |
 | `GATEWAY_ALLOW_ALL_USERS` | `true` = open access (no allowlist). Default: `false` |
 
+When a new user contacts the bot for the first time, they receive a random pairing
+code and are asked to pass it to the bot owner for approval. To approve (or revoke)
+users, open the **Dashboard → Pairing** tab at `http://localhost:9119/pairing`.
+The Pairing tab lists all pending codes with one-click **Approve** buttons, and
+shows all approved users with **Revoke** buttons. No CLI required.
+
 ### Tool API Keys
 
 | Variable | Description |
