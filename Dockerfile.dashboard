@@ -2,5 +2,5 @@ FROM nousresearch/hermes-agent:latest
 USER root
 COPY --chown=hermes:hermes files/pairing-plugin/manifest.json /opt/hermes/plugins/pairing/dashboard/manifest.json
 COPY --chown=hermes:hermes files/pairing-plugin/api.py /opt/hermes/plugins/pairing/dashboard/api.py
-COPY --chown=hermes:hermes files/pairing-plugin/dist/index.js /opt/hermes/plugins/pairing/dashboard/dist/index.js
+COPY --chown=hermes:hermes files/pairing-plugin/index.js /opt/hermes/plugins/pairing/dashboard/index.js
 USER hermes
