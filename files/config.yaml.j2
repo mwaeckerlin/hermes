@@ -1,0 +1,216 @@
+# Hermes Agent configuration — rendered from config.yaml.j2 by gateway-entrypoint.sh.
+# Read the full reference at:
+#   https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/configuration.md
+#
+# Template variables (all HERMES_* env vars below are specific to this Docker setup):
+#   Section-level overrides  — HERMES_<SECTION>_YAML   (JSON string, JSON is valid YAML)
+#   Individual overrides     — HERMES_*                 (see each section below)
+#
+# All real Hermes API keys and channel tokens (OPENROUTER_API_KEY, TELEGRAM_BOT_TOKEN, …)
+# are passed as environment variables and read natively by Hermes — no config.yaml entry needed.
+
+# =============================================================================
+# Model Configuration
+# =============================================================================
+{% if HERMES_MODEL_YAML | default('') %}
+model: {{ HERMES_MODEL_YAML }}
+{% else %}
+model:
+  # Set HERMES_DEFAULT_MODEL env var to override; entrypoint auto-selects from available API keys.
+  default: "{{ HERMES_DEFAULT_MODEL | default('anthropic/claude-opus-4.6') }}"
+  provider: "{{ HERMES_MODEL_PROVIDER | default('auto') }}"
+{% if HERMES_MODEL_BASE_URL | default('') %}
+  base_url: "{{ HERMES_MODEL_BASE_URL }}"
+{% endif %}
+{% if HERMES_MODEL_MAX_TOKENS | default('') %}
+  max_tokens: {{ HERMES_MODEL_MAX_TOKENS | int }}
+{% endif %}
+{% endif %}
+
+# =============================================================================
+# Terminal Tool — SSH Remote Execution
+# =============================================================================
+{% if HERMES_TERMINAL_YAML | default('') %}
+terminal: {{ HERMES_TERMINAL_YAML }}
+{% else %}
+terminal:
+  backend: ssh
+  # Connection target: hermes-sandbox container, user 'somebody'
+  ssh_host: "{{ HERMES_TERMINAL_SSH_HOST | default('hermes-sandbox') }}"
+  ssh_user: "{{ HERMES_TERMINAL_SSH_USER | default('somebody') }}"
+  ssh_port: {{ HERMES_TERMINAL_SSH_PORT | default('22') | int }}
+  # SSH key is written to $HERMES_HOME/.ssh/hermes-sandbox by entrypoint.sh
+  ssh_key: "~/.ssh/hermes-sandbox"
+  cwd: "~"
+  timeout: {{ HERMES_TERMINAL_TIMEOUT | default('180') | int }}
+  lifetime_seconds: {{ HERMES_TERMINAL_LIFETIME | default('300') | int }}
+{% endif %}
+
+# =============================================================================
+# Context Compression
+# =============================================================================
+{% if HERMES_COMPRESSION_YAML | default('') %}
+compression: {{ HERMES_COMPRESSION_YAML }}
+{% else %}
+compression:
+  enabled: {{ HERMES_COMPRESSION_ENABLED | default('true') }}
+  threshold: {{ HERMES_COMPRESSION_THRESHOLD | default('0.50') }}
+  target_ratio: {{ HERMES_COMPRESSION_TARGET_RATIO | default('0.20') }}
+  protect_last_n: {{ HERMES_COMPRESSION_PROTECT_LAST_N | default('20') | int }}
+{% endif %}
+
+# =============================================================================
+# Persistent Memory
+# =============================================================================
+{% if HERMES_MEMORY_YAML | default('') %}
+memory: {{ HERMES_MEMORY_YAML }}
+{% else %}
+memory:
+  memory_enabled: {{ HERMES_MEMORY_ENABLED | default('true') }}
+  user_profile_enabled: {{ HERMES_USER_PROFILE_ENABLED | default('true') }}
+  memory_char_limit: {{ HERMES_MEMORY_CHAR_LIMIT | default('2200') | int }}
+  user_char_limit: {{ HERMES_USER_CHAR_LIMIT | default('1375') | int }}
+  nudge_interval: {{ HERMES_MEMORY_NUDGE_INTERVAL | default('10') | int }}
+  flush_min_turns: {{ HERMES_MEMORY_FLUSH_MIN_TURNS | default('6') | int }}
+{% endif %}
+
+# =============================================================================
+# Session Reset (Messaging Platforms)
+# =============================================================================
+{% if HERMES_SESSION_RESET_YAML | default('') %}
+session_reset: {{ HERMES_SESSION_RESET_YAML }}
+{% else %}
+session_reset:
+  mode: "{{ HERMES_SESSION_RESET_MODE | default('both') }}"
+  idle_minutes: {{ HERMES_SESSION_RESET_IDLE_MINUTES | default('1440') | int }}
+  at_hour: {{ HERMES_SESSION_RESET_AT_HOUR | default('4') | int }}
+{% endif %}
+
+group_sessions_per_user: {{ HERMES_GROUP_SESSIONS_PER_USER | default('true') }}
+
+# =============================================================================
+# Gateway Streaming (real-time token delivery to messaging platforms)
+# =============================================================================
+{% if HERMES_STREAMING_YAML | default('') %}
+streaming: {{ HERMES_STREAMING_YAML }}
+{% else %}
+streaming:
+  enabled: {{ HERMES_STREAMING_ENABLED | default('false') }}
+{% if HERMES_STREAMING_ENABLED | default('') == 'true' %}
+  edit_interval: {{ HERMES_STREAMING_EDIT_INTERVAL | default('0.3') }}
+  buffer_threshold: {{ HERMES_STREAMING_BUFFER_THRESHOLD | default('40') | int }}
+{% endif %}
+{% endif %}
+
+# =============================================================================
+# Skills
+# =============================================================================
+{% if HERMES_SKILLS_YAML | default('') %}
+skills: {{ HERMES_SKILLS_YAML }}
+{% else %}
+skills:
+  creation_nudge_interval: {{ HERMES_SKILLS_NUDGE_INTERVAL | default('15') | int }}
+{% endif %}
+
+# =============================================================================
+# Agent Behavior
+# =============================================================================
+{% if HERMES_AGENT_YAML | default('') %}
+agent: {{ HERMES_AGENT_YAML }}
+{% else %}
+agent:
+  max_turns: {{ HERMES_MAX_TURNS | default('60') | int }}
+  verbose: {{ HERMES_AGENT_VERBOSE | default('false') }}
+  reasoning_effort: "{{ HERMES_REASONING_EFFORT | default('medium') }}"
+{% if HERMES_GATEWAY_TIMEOUT | default('') %}
+  gateway_timeout: {{ HERMES_GATEWAY_TIMEOUT | int }}
+{% endif %}
+{% if HERMES_GATEWAY_TIMEOUT_WARNING | default('') %}
+  gateway_timeout_warning: {{ HERMES_GATEWAY_TIMEOUT_WARNING | int }}
+{% endif %}
+{% if HERMES_GATEWAY_DRAIN_TIMEOUT | default('') %}
+  restart_drain_timeout: {{ HERMES_GATEWAY_DRAIN_TIMEOUT | int }}
+{% endif %}
+{% endif %}
+
+# =============================================================================
+# Platform Toolsets
+# =============================================================================
+{% if HERMES_PLATFORM_TOOLSETS_YAML | default('') %}
+platform_toolsets: {{ HERMES_PLATFORM_TOOLSETS_YAML }}
+{% else %}
+platform_toolsets:
+  cli: [hermes-cli]
+  telegram: [hermes-telegram]
+  discord: [hermes-discord]
+  whatsapp: [hermes-whatsapp]
+  slack: [hermes-slack]
+  signal: [hermes-signal]
+  homeassistant: [hermes-homeassistant]
+  qqbot: [hermes-qqbot]
+{% endif %}
+
+# =============================================================================
+# Speech-to-Text
+# =============================================================================
+{% if HERMES_STT_YAML | default('') %}
+stt: {{ HERMES_STT_YAML }}
+{% else %}
+stt:
+  enabled: {{ HERMES_STT_ENABLED | default('true') }}
+  local:
+    model: "{{ HERMES_STT_LOCAL_MODEL | default('base') }}"
+{% if HERMES_STT_LOCAL_LANGUAGE | default('') %}
+    language: "{{ HERMES_STT_LOCAL_LANGUAGE }}"
+{% endif %}
+{% endif %}
+
+# =============================================================================
+# Code Execution Sandbox
+# =============================================================================
+{% if HERMES_CODE_EXECUTION_YAML | default('') %}
+code_execution: {{ HERMES_CODE_EXECUTION_YAML }}
+{% else %}
+code_execution:
+  timeout: {{ HERMES_CODE_EXECUTION_TIMEOUT | default('300') | int }}
+  max_tool_calls: {{ HERMES_CODE_EXECUTION_MAX_TOOL_CALLS | default('50') | int }}
+{% endif %}
+
+# =============================================================================
+# Subagent Delegation
+# =============================================================================
+{% if HERMES_DELEGATION_YAML | default('') %}
+delegation: {{ HERMES_DELEGATION_YAML }}
+{% else %}
+delegation:
+  max_iterations: {{ HERMES_DELEGATION_MAX_ITERATIONS | default('50') | int }}
+{% if HERMES_DELEGATION_MAX_CONCURRENT | default('') %}
+  max_concurrent_children: {{ HERMES_DELEGATION_MAX_CONCURRENT | int }}
+{% endif %}
+{% if HERMES_DELEGATION_MAX_SPAWN_DEPTH | default('') %}
+  max_spawn_depth: {{ HERMES_DELEGATION_MAX_SPAWN_DEPTH | int }}
+{% endif %}
+{% endif %}
+
+# =============================================================================
+# MCP Servers (Model Context Protocol)
+# =============================================================================
+{% if HERMES_MCP_SERVERS_YAML | default('') %}
+mcp_servers: {{ HERMES_MCP_SERVERS_YAML }}
+{% endif %}
+
+# =============================================================================
+# Display
+# =============================================================================
+{% if HERMES_DISPLAY_YAML | default('') %}
+display: {{ HERMES_DISPLAY_YAML }}
+{% else %}
+display:
+  compact: {{ HERMES_DISPLAY_COMPACT | default('false') }}
+  tool_progress: "{{ HERMES_DISPLAY_TOOL_PROGRESS | default('all') }}"
+  interim_assistant_messages: {{ HERMES_DISPLAY_INTERIM_MESSAGES | default('true') }}
+  background_process_notifications: "{{ HERMES_DISPLAY_BG_NOTIFICATIONS | default('all') }}"
+  show_reasoning: {{ HERMES_DISPLAY_SHOW_REASONING | default('false') }}
+  streaming: {{ HERMES_DISPLAY_STREAMING | default('true') }}
+  skin: "{{ HERMES_DISPLAY_SKIN | default('default') }}"
+{% endif %}

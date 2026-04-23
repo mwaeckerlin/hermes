@@ -1,24 +1,24 @@
 ---
 name: ssh-sandbox
-description: Use this skill to operate safely inside the Hermes SSH sandbox and choose the correct communication path.
+description: Use this skill to operate safely inside the Hermes SSH sandbox.
 ---
 
 # SSH Sandbox
 
-Canonical active install path:
+Canonical active install path on the sandbox:
 
-- `~/.hermes/workspace/skills/ssh-sandbox/SKILL.md`
+- `~/.hermes/skills/ssh-sandbox/SKILL.md`
 
-Only this path counts as installed.
+Only this path counts as installed. Hermes syncs skills from the gateway to
+this directory automatically via the SSH backend before each session.
 
 ## Environment Facts
 
-- You run in an Ubuntu SSH sandbox.
+- You run in an Ubuntu SSH sandbox. The Hermes gateway connects here via SSH.
 - Package inventory sources:
   - `/etc/installed-ubuntu-packages` (image package list)
   - `/var/lib/dpkg/status` (dpkg database)
 - If `DOCKER_HOST` is set, Docker is available through a connected Docker service.
-- If `HERMES_MCP_GATEWAY_URL` is set, MCP is available through the configured MCP gateway endpoint.
 
 ## First Steps (Always)
 
@@ -30,80 +30,60 @@ cat /etc/os-release
 whoami
 pwd
 echo "DOCKER_HOST=${DOCKER_HOST}"
-echo "HERMES_MCP_GATEWAY_URL=${HERMES_MCP_GATEWAY_URL}"
 test -f /etc/installed-ubuntu-packages && echo "package list present"
 test -f /var/lib/dpkg/status && echo "dpkg status present"
 ```
 
 Interpretation:
 
-- Empty `HERMES_MCP_GATEWAY_URL` => MCP path unavailable in this session.
-- Empty `DOCKER_HOST` => do not assume Docker usage.
-- Missing `/etc/installed-ubuntu-packages` or `/var/lib/dpkg/status` => package baseline is unverified; treat package assumptions as uncertain.
-- `DOCKER_HOST` set does not guarantee usability; only treat Docker as usable after `docker info` succeeds.
+- Empty `DOCKER_HOST` — do not assume Docker usage.
+- Missing `/etc/installed-ubuntu-packages` or `/var/lib/dpkg/status` — package
+  baseline is unverified; treat package assumptions as uncertain.
+- `DOCKER_HOST` set does not guarantee usability; only treat Docker as usable
+  after `docker info` succeeds.
 
 ## Security Rules
 
 Mandatory:
 
-- Do not expect gateway/API tokens in the sandbox.
+- Do not expect gateway API keys or LLM provider tokens in the sandbox.
 - Do not perform direct secret extraction attempts.
-- Do not use unvalidated passthrough requests.
-- Do not infer permission/safety from command visibility alone.
-
-## Communication Rules
-
-Intended standard path:
-
-- Sandbox client -> `HERMES_MCP_GATEWAY_URL` -> MCP gateway -> Hermes gateway
-
-Do not assume:
-
-- direct privileged sandbox -> gateway access
-- command visibility defines the intended communication path
+- Do not infer permission or safety from command visibility alone.
 
 ## Common False Assumptions
 
-- `hermes acp` is an HTTP/MCP endpoint URL like `HERMES_MCP_GATEWAY_URL`. False.
+- Gateway tokens or LLM API keys are not available inside the sandbox. False
+  assumptions about their presence are a security risk.
 - A visible CLI command is automatically usable/safe. False.
-- Missing tokens inside sandbox is a config bug. False.
+- Missing tokens inside sandbox is a configuration bug. False — by design.
 
-## MCP Gateway Skill Presence
+## Packaged Skill Sources
 
-This deployment variant packages skills in sandbox image under `/opt/hermes/skills` and copies them at sandbox startup into all existing workspace skill directories:
+This deployment copies skills at sandbox startup into `~/.hermes/skills/`:
 
-- `~/workspaces/*/skills/<skill-name>/SKILL.md`
-
-Packaged sources:
-
-- `/opt/hermes/skills/hermes-mcp-gateway/SKILL.md`
 - `/opt/hermes/skills/ssh-sandbox/SKILL.md`
 
 Verify installed copies:
 
 ```bash
-find ~/workspaces -maxdepth 4 -type f -path '*/skills/*/SKILL.md' 2>/dev/null
+find ~/.hermes/skills -maxdepth 3 -type f -name 'SKILL.md' 2>/dev/null
 ```
 
 ## Troubleshooting
 
-### MCP not reachable
+### Docker not available
 
 ```bash
-echo "$HERMES_MCP_GATEWAY_URL"
+echo "$DOCKER_HOST"
+docker info
 ```
 
-- Empty: MCP not configured in sandbox.
-- Set but failing: verify MCP service/container/network.
-
-### Gateway status unknown
-
-- Use MCP health/status tools first when MCP is available.
-- Do not treat direct gateway probing from sandbox as standard path.
+- Empty `DOCKER_HOST`: Docker not configured for this session.
+- `DOCKER_HOST` set but failing: verify the Docker service/container/network.
 
 ### Skill missing
 
 ```bash
-find ~/workspaces -maxdepth 4 -type d -path '*/skills' 2>/dev/null
-find ~/workspaces -maxdepth 4 -type f -path '*/skills/*/SKILL.md' 2>/dev/null
+find ~/.hermes/skills -maxdepth 3 -type d 2>/dev/null
+find ~/.hermes/skills -maxdepth 3 -type f -name 'SKILL.md' 2>/dev/null
 ```
