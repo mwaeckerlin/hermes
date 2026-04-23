@@ -8,6 +8,6 @@
     "path": "/pairing",
     "position": "end"
   },
-  "entry": "index.js",
+  "entry": "dist/index.js",
   "api": "api.py"
 }
