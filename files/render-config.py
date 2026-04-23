@@ -34,7 +34,12 @@ env = Environment(
 )
 
 template = env.from_string(template_str)
-rendered = template.render(os.environ)
+# Exclude empty-string env vars so Jinja2 treats them as undefined.
+# docker-compose passes unset variables as empty strings (e.g. ${VAR:-}),
+# which would bypass the `| default(...)` filter and render blank YAML values
+# (parsed as null), causing downstream TypeErrors in the gateway.
+context = {k: v for k, v in os.environ.items() if v != ""}
+rendered = template.render(context)
 
 with open(output_file, "w") as fh:
     fh.write(rendered)
