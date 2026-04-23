@@ -50,10 +50,11 @@ echo "==== Rendering Jinja2 Configuration ===="
   "${HERMES_HOME}/config.yaml.rendered"
 
 echo "==== Configuring Hermes ===="
-if [ -n "$OVERWRITE_CONFIG" ] || [ ! -e "${HERMES_HOME}/config.yaml" ]; then
-  cp "${HERMES_HOME}/config.yaml.rendered" "${HERMES_HOME}/config.yaml"
-  echo "config.yaml written"
-fi
+# Always write the freshly rendered config so that template fixes and env-var
+# changes take effect on every container restart, even when the persistent
+# volume already contains a config.yaml from a previous run.
+cp "${HERMES_HOME}/config.yaml.rendered" "${HERMES_HOME}/config.yaml"
+echo "config.yaml written"
 
 echo "==== Redirecting PID and Lock Files to /tmp ===="
 # gateway.pid and gateway.lock must not live in the persistent volume — stale
