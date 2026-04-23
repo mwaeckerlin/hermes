@@ -127,7 +127,7 @@ services:
     command: ["dashboard", "--host", "0.0.0.0"]
     depends_on:
       hermes-gateway:
-        condition: service_healthy
+        condition: service_started
     environment:
       GATEWAY_HEALTH_URL: http://hermes-gateway:8642
       GATEWAY_HEALTH_TIMEOUT: ${GATEWAY_HEALTH_TIMEOUT:-3}
