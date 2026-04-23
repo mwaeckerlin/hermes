@@ -60,6 +60,24 @@ compression:
 {% endif %}
 
 # =============================================================================
+# Auxiliary LLM (context compression / summarization / memory flush)
+# =============================================================================
+# Hermes auto-detects auxiliary via OpenRouter → Nous → Codex.  When none of
+# those keys are present we must configure the auxiliary explicitly; otherwise
+# the compressor silently drops middle turns without a summary.
+# Using provider "main" reuses the same credentials as the primary model.
+{% if HERMES_AUXILIARY_YAML | default('') %}
+auxiliary: {{ HERMES_AUXILIARY_YAML }}
+{% elif not OPENROUTER_API_KEY | default('') %}
+auxiliary:
+  compression:
+    provider: "main"
+{% if OPENAI_API_KEY | default('') %}
+    model: "gpt-4o-mini"
+{% endif %}
+{% endif %}
+
+# =============================================================================
 # Persistent Memory
 # =============================================================================
 {% if HERMES_MEMORY_YAML | default('') %}
