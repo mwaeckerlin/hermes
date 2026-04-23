@@ -55,5 +55,8 @@ if [ -n "$OVERWRITE_CONFIG" ] || [ ! -e "${HERMES_HOME}/config.yaml" ]; then
   echo "config.yaml written"
 fi
 
+echo "==== Cleaning Up Stale PID Files ===="
+find "${HERMES_HOME}" -maxdepth 3 -name "*.pid" -delete 2>/dev/null || true
+
 echo "==== Starting Hermes Gateway ===="
 exec /opt/hermes/docker/entrypoint.sh "$@"
