@@ -124,7 +124,7 @@ services:
 
   hermes-dashboard:
     image: nousresearch/hermes-agent:latest
-    command: ["dashboard", "--host", "0.0.0.0"]
+    command: ["dashboard", "--host", "0.0.0.0", "--insecure"]
     depends_on:
       hermes-gateway:
         condition: service_started
