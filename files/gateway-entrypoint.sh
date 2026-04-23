@@ -55,8 +55,14 @@ if [ -n "$OVERWRITE_CONFIG" ] || [ ! -e "${HERMES_HOME}/config.yaml" ]; then
   echo "config.yaml written"
 fi
 
-echo "==== Cleaning Up Stale PID Files ===="
-find "${HERMES_HOME}" -maxdepth 3 -name "*.pid" -delete 2>/dev/null || true
+echo "==== Redirecting PID and Lock Files to /tmp ===="
+# gateway.pid and gateway.lock must not live in the persistent volume — stale
+# files from a previous container would block startup.  Symlink them into /tmp
+# (ephemeral, never persisted) so the volume only holds user data.
+for f in gateway.pid gateway.lock; do
+  rm -f "${HERMES_HOME}/${f}"
+  ln -sf "/tmp/${f}" "${HERMES_HOME}/${f}"
+done
 
 echo "==== Starting Hermes Gateway ===="
 exec /opt/hermes/docker/entrypoint.sh "$@"
