@@ -42,7 +42,7 @@ services:
       SLACK_APP_TOKEN: ${SLACK_APP_TOKEN:-}
       SLACK_ALLOWED_USERS: ${SLACK_ALLOWED_USERS:-}
       # Gateway-wide open access (false = allowlist only)
-      GATEWAY_ALLOW_ALL_USERS: ${GATEWAY_ALLOW_ALL_USERS:-false}
+      GATEWAY_ALLOW_ALL_USERS: ${GATEWAY_ALLOW_ALL_USERS:-true}
       # ── Tool API keys ────────────────────────────────────────────────────────
       # Voice transcription (Whisper) and OpenAI TTS
       # Defaults to OPENAI_API_KEY if unset (handled by entrypoint).
