@@ -122,6 +122,26 @@ services:
     networks:
       - gateway-sandbox
 
+  hermes-dashboard:
+    image: nousresearch/hermes-agent:latest
+    command: ["dashboard", "--host", "0.0.0.0"]
+    depends_on:
+      hermes-gateway:
+        condition: service_healthy
+    environment:
+      GATEWAY_HEALTH_URL: http://hermes-gateway:8642
+      GATEWAY_HEALTH_TIMEOUT: ${GATEWAY_HEALTH_TIMEOUT:-3}
+    volumes:
+      - hermes-data:/opt/data
+    ports:
+      - "${HERMES_DASHBOARD_PORT:-9119}:9119"
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks:
+      - gateway-sandbox
+
   hermes-sandbox:
     image: mwaeckerlin/hermes:sandbox
     build:

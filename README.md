@@ -8,9 +8,11 @@ out of the box — locally or in a cloud.
 1. get an API key (e.g. [OpenRouter](https://openrouter.ai/keys), [Anthropic](https://console.anthropic.com/), or [OpenAI](https://platform.openai.com/api-keys))
 2. write some [configuration variables in `.env`](#local-development-setup)
 3. run `npm start`
-4. open: [`http://localhost:8642/`](http://localhost:8642/)
+4. open the dashboard: [`http://localhost:9119/`](http://localhost:9119/)
 
-Or connect a chat platform (Telegram, Discord, Slack) and skip the HTTP port entirely.
+Port 8642 is the OpenAI-compatible API and health endpoint (`/healthz`). The web dashboard runs as a separate service on port 9119.
+
+Or connect a chat platform (Telegram, Discord, Slack) and skip the HTTP ports entirely.
 
 **Target audience:** Security-aware **developer** with basic Docker know-how.
 
@@ -94,6 +96,10 @@ cloud docker {
     ctrl - cfg
   }
 
+  node "nousresearch/hermes-agent\n(dashboard)" as dash {
+    [Dashboard] as ui
+  }
+
   node "mwaeckerlin/hermes:sandbox" as sb {
     [SSH Daemon] as sshd
     storage "hermes-workspace\n/home/somebody" as ws
@@ -108,6 +114,8 @@ cloud docker {
 }
 
 user --> ctrl : "HTTP :8642\n(API / health)"
+user --> ui : "HTTP :9119\n(web dashboard)"
+ui --> ctrl : "GATEWAY_HEALTH_URL\nhttp://hermes-gateway:8642"
 ctrl --> sshd : "SSH :22\n(execute commands)"
 sshd -left-> dd : docker
 @enduml
@@ -160,10 +168,10 @@ npm start
 npm run start:daemon
 ```
 
-Gateway API: `http://localhost:8642/`  
-Health check: `http://localhost:8642/healthz`
+Gateway API / health: `http://localhost:8642/healthz`  
+Dashboard (web UI): `http://localhost:9119/`
 
-**Local / trusted-network use only.** Do not expose port 8642 to the Internet
+**Local / trusted-network use only.** Do not expose these ports to the Internet
 without a TLS reverse proxy.
 
 ## Full Configuration Guide
@@ -341,6 +349,7 @@ Docker-in-Docker is therefore not supported in Swarm mode.
 
 - [ ] All secrets via `docker secret`, not environment variables
 - [ ] Encrypted overlay network (`--opt encrypted`)
-- [ ] Port 8642 behind TLS reverse proxy (nginx, Traefik, Kong)
+- [ ] Port 8642 behind TLS reverse proxy (nginx, Traefik, Kong) — or not exposed at all when using only chat platforms
+- [ ] Port 9119 (dashboard) behind TLS reverse proxy with authentication — or not exposed publicly
 - [ ] `GATEWAY_ALLOW_ALL_USERS=false` (default) or explicit `TELEGRAM_ALLOWED_USERS`/`DISCORD_*` allowlists
-- [ ] Firewall restricts access to gateway port
+- [ ] Firewall restricts access to gateway and dashboard ports

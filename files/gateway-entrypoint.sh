@@ -7,9 +7,7 @@ for secret in /run/secrets/*; do
   test -e "$secret" || continue
   varname=$(basename "$secret" | tr '[:lower:]-' '[:upper:]_')
   echo "Setting $varname from $secret"
-  _secret_val=$(sed -z 's/\n/\\n/g' "$secret")
-  export "$varname=$_secret_val"
-  unset _secret_val
+  export "$varname=$(sed -z 's/\n/\\n/g' "$secret")"
 done
 
 echo "==== Setting Derived Variables ===="
