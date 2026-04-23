@@ -158,24 +158,24 @@ services:
     security_opt:
       - no-new-privileges:true
     pids_limit: 256
-    depends_on:
-      hermes-dind:
-        condition: service_started
+    #depends_on:
+    #  hermes-dind:
+    #    condition: service_started
     restart: unless-stopped
     networks:
       - gateway-sandbox
       - sandbox-dind
 
-  hermes-dind:
-    image: docker:dind
-    privileged: true
-    environment:
-      DOCKER_TLS_CERTDIR: ""
-    volumes:
-      - hermes-docker:/var/lib/docker
-    restart: unless-stopped
-    networks:
-      - sandbox-dind
+  #hermes-dind:
+  #  image: docker:dind
+  #  privileged: true
+  #  environment:
+  #    DOCKER_TLS_CERTDIR: ""
+  #  volumes:
+  #    - hermes-docker:/var/lib/docker
+  #  restart: unless-stopped
+  #  networks:
+  #    - sandbox-dind
 
 networks:
   gateway-sandbox:
