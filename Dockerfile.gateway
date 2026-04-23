@@ -1,16 +1,10 @@
-FROM mwaeckerlin/hermes-mcp-gateway AS mcp_gateway_skills
-
-FROM alpine/hermes:latest
-RUN cd /tmp && npm install nunjucks
-ENV NODE_PATH=/tmp/node_modules
-RUN install -d -m 700 /home/node/.ssh
-RUN install -d -m 755 /app/skills/ssh-sandbox /app/skills/hermes-mcp-gateway
-ADD files/gateway-entrypoint.sh /entrypoint.sh
-ADD files/render-config.js /render-config.js
-ADD files/hermes.json.j2 /hermes.json.j2.default
-ADD files/SKILL.md /app/skills/ssh-sandbox/SKILL.md
-COPY --from=mcp_gateway_skills /app/skills/hermes-mcp-gateway/SKILL.md /app/skills/hermes-mcp-gateway/SKILL.md
+FROM nousresearch/hermes-agent:latest
+USER root
+COPY --chown=hermes:hermes files/SKILL.md /opt/hermes/skills/ssh-sandbox/SKILL.md
+COPY files/config.yaml.j2 /config.yaml.j2.default
+COPY files/render-config.py /render-config.py
+COPY --chmod=0755 files/gateway-entrypoint.sh /entrypoint.sh
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=60 \
-  CMD node -e "fetch('http://127.0.0.1:18789/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD /opt/hermes/.venv/bin/python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8642/healthz', timeout=5)"
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["node", "dist/index.js", "gateway", "--bind", "lan", "--port", "18789"]
+CMD ["gateway", "run"]

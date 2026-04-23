@@ -1,6 +1,7 @@
 {
   "name": "@mwaeckerlin/hermes",
   "version": "1.0.0",
+  "description": "Secure sandboxed NousResearch Hermes agent with SSH-isolated Ubuntu sandbox and Docker-in-Docker support",
   "scripts": {
     "build": "docker compose build",
     "build:doc": "plantuml -tsvg -o doc README.md",

@@ -1,173 +1,61 @@
 #!/bin/sh -e
-echo "==== Setting All Secrets ===="
+
+HERMES_HOME="${HERMES_HOME:-/opt/data}"
+
+echo "==== Reading Docker Secrets ===="
 for secret in /run/secrets/*; do
   test -e "$secret" || continue
   varname=$(basename "$secret" | tr '[:lower:]-' '[:upper:]_')
   echo "Setting $varname from $secret"
-  export "$varname=$(sed -z 's/\n/\\n/g' "$secret")"
+  _secret_val=$(sed -z 's/\n/\\n/g' "$secret")
+  export "$varname=$_secret_val"
+  unset _secret_val
 done
 
-echo "==== Setting OpenAI API Key ===="
-if [ -z "$HERMES_WHISPER_API_KEY" -a -n "$OPENAI_API_KEY" ]; then
-  export HERMES_WHISPER_API_KEY="$OPENAI_API_KEY"
-  echo "HERMES_WHISPER_API_KEY set from OPENAI_API_KEY"
+echo "==== Setting Derived Variables ===="
+# Whisper/TTS: VOICE_TOOLS_OPENAI_KEY is Hermes's real env var for voice features.
+# Fall back to OPENAI_API_KEY if not set separately.
+if [ -z "$VOICE_TOOLS_OPENAI_KEY" ] && [ -n "$OPENAI_API_KEY" ]; then
+  export VOICE_TOOLS_OPENAI_KEY="$OPENAI_API_KEY"
+  echo "VOICE_TOOLS_OPENAI_KEY set from OPENAI_API_KEY"
 fi
 
-echo "==== Setting SSH Authorized Key ===="
+# Auto-select default model based on available API keys (overridable via HERMES_DEFAULT_MODEL).
+if [ -z "$HERMES_DEFAULT_MODEL" ]; then
+  if [ -n "$OPENROUTER_API_KEY" ]; then
+    export HERMES_DEFAULT_MODEL="openrouter/anthropic/claude-opus-4.6"
+  elif [ -n "$ANTHROPIC_API_KEY" ]; then
+    export HERMES_DEFAULT_MODEL="anthropic/claude-opus-4.6"
+  elif [ -n "$GOOGLE_API_KEY" ] || [ -n "$GEMINI_API_KEY" ]; then
+    export HERMES_DEFAULT_MODEL="gemini/gemini-2.5-pro"
+  else
+    export HERMES_DEFAULT_MODEL="openai/gpt-4o"
+  fi
+  echo "HERMES_DEFAULT_MODEL auto-selected: $HERMES_DEFAULT_MODEL"
+fi
+
+echo "==== Setting Up SSH Key for Sandbox ===="
 if [ -z "$HERMES_SANDBOX_SSH_PRIVATE_KEY" ]; then
-  echo "ERROR: No SSH private key provided for sandbox. Please set HERMES_SANDBOX_SSH_PRIVATE_KEY variable or provide a secret named hermes_sandbox_ssh_private_key." >&2
+  echo "ERROR: HERMES_SANDBOX_SSH_PRIVATE_KEY is not set." >&2
+  echo "       Provide it as an environment variable or as Docker secret hermes_sandbox_ssh_private_key." >&2
   exit 1
 fi
-printf '%b' "${HERMES_SANDBOX_SSH_PRIVATE_KEY}" > ~/.ssh/ssh-id-gateway
-chmod 600 ~/.ssh/ssh-id-gateway
+mkdir -p "${HERMES_HOME}/.ssh"
+printf '%b' "${HERMES_SANDBOX_SSH_PRIVATE_KEY}" > "${HERMES_HOME}/.ssh/hermes-sandbox"
+chmod 600 "${HERMES_HOME}/.ssh/hermes-sandbox"
+# TERMINAL_SSH_KEY is the env var Hermes reads for the SSH private key path.
+export TERMINAL_SSH_KEY="${HERMES_HOME}/.ssh/hermes-sandbox"
 
 echo "==== Rendering Jinja2 Configuration ===="
-node /render-config.js /hermes.json.j2.default ~/.hermes/hermes.json.rendered
-
-normalize_provider_models() {
-  _cfg_path="$1"
-  [ -f "$_cfg_path" ] || return 0
-  echo "==== Normalizing Provider Model Catalog: $_cfg_path ===="
-  node -e "
-  const fs = require('fs');
-  const p = process.argv[1];
-  const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
-  const providers = cfg?.models?.providers;
-  if (providers && typeof providers === 'object') {
-    for (const [providerId, provider] of Object.entries(providers)) {
-      if (!provider || typeof provider !== 'object') continue;
-      const rows = provider.models;
-      if (!Array.isArray(rows)) continue;
-      provider.models = rows
-        .map((m) => {
-          if (typeof m === 'string') return { id: m, name: m };
-          if (!m || typeof m !== 'object') return null;
-          if (typeof m.id !== 'string') return null;
-          if (typeof m.name !== 'string' || m.name.length === 0) return { ...m, name: m.id };
-          return m;
-        })
-        .filter(Boolean);
-      providers[providerId] = provider;
-    }
-  }
-  fs.writeFileSync(p, JSON.stringify(cfg, null, 2));
-" "$_cfg_path"
-}
-
-normalize_provider_models ~/.hermes/hermes.json.rendered
+/opt/hermes/.venv/bin/python3 /render-config.py \
+  /config.yaml.j2.default \
+  "${HERMES_HOME}/config.yaml.rendered"
 
 echo "==== Configuring Hermes ===="
-if [ -n "$OVERWRITE_CONFIG" ] || [ ! -e ~/.hermes/hermes.json ]; then
-  cp ~/.hermes/hermes.json.rendered ~/.hermes/hermes.json
-fi
-normalize_provider_models ~/.hermes/hermes.json
-
-if [ -n "$HERMES_DEVICE_PAIRING" ]; then
-  echo "==== Pre-Seeding Device Pairing ===="
-  _state_dir="${HERMES_STATE_DIR:-$HOME/.hermes}"
-  mkdir -p "$_state_dir/devices"
-  printf '%b' "$HERMES_DEVICE_PAIRING" > "$_state_dir/devices/paired.json"
-  echo "Device pairing written to $_state_dir/devices/paired.json"
-fi
-
-if [ -n "$LITELLM_URL" ] && [ -n "$LITELLM_MASTER_KEY" ]; then
-  echo "==== Discovering LiteLLM Models ===="
-  model_count=$(curl -sf -H "Authorization: Bearer $LITELLM_MASTER_KEY" "$LITELLM_URL/v1/models" 2>/dev/null | node -e "
-    const fs = require('fs');
-    const cfgPath = process.argv[1];
-    const providerId = process.argv[2];
-    const raw = fs.readFileSync(0, 'utf8');
-    if (!raw || !raw.trim()) process.exit(2);
-    const data = JSON.parse(raw);
-    const rows = Array.isArray(data?.data) ? data.data : [];
-    const models = rows
-      .filter((m) => m && typeof m.id === 'string')
-      .map((m) => ({ id: m.id, name: m.id }));
-    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-    if (!cfg.models || typeof cfg.models !== 'object') cfg.models = {};
-    if (!cfg.models.providers || typeof cfg.models.providers !== 'object') cfg.models.providers = {};
-    if (!cfg.models.providers[providerId] || typeof cfg.models.providers[providerId] !== 'object') {
-      cfg.models.providers[providerId] = {};
-    }
-    cfg.models.providers[providerId].models = models;
-    fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-    process.stdout.write(String(models.length));
-  " "$HOME/.hermes/hermes.json" "litellm") || {
-    echo "ERROR: Failed to discover models from LiteLLM at $LITELLM_URL" >&2
-    exit 1
-  }
-  echo "  Discovered $model_count models from LiteLLM"
-  echo "Models injected into config"
-fi
-
-if [ -n "$OPENAI_API_KEY" ] && [ -z "$HERMES_OPENAI_MODELS_JSON" ]; then
-  _openai_base="${HERMES_OPENAI_BASE_URL:-https://api.openai.com/v1}"
-  _openai_url="${_openai_base%/}/models"
-  echo "==== Discovering OpenAI Models ===="
-  if model_count=$(curl -sf -H "Authorization: Bearer $OPENAI_API_KEY" "$_openai_url" 2>/dev/null | node -e "
-    const fs = require('fs');
-    const cfgPath = process.argv[1];
-    const providerId = process.argv[2];
-    const syncDiscoveredToAgentList = process.argv[3] === 'true';
-    const raw = fs.readFileSync(0, 'utf8');
-    if (!raw || !raw.trim()) process.exit(2);
-    const data = JSON.parse(raw);
-    const rows = Array.isArray(data?.data) ? data.data : [];
-    const models = rows
-      .filter((m) => m && typeof m.id === 'string')
-      .map((m) => ({ id: m.id, name: m.id }));
-    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf8'));
-    if (!cfg.models || typeof cfg.models !== 'object') cfg.models = {};
-    if (!cfg.models.providers || typeof cfg.models.providers !== 'object') cfg.models.providers = {};
-    if (!cfg.models.providers[providerId] || typeof cfg.models.providers[providerId] !== 'object') {
-      cfg.models.providers[providerId] = {};
-    }
-    cfg.models.providers[providerId].models = models;
-    if (syncDiscoveredToAgentList) {
-      if (!cfg.agents || typeof cfg.agents !== 'object') cfg.agents = {};
-      if (!cfg.agents.defaults || typeof cfg.agents.defaults !== 'object') cfg.agents.defaults = {};
-      cfg.agents.defaults.models = Object.fromEntries(
-        models.map((m) => [providerId + '/' + m.id, {}]),
-      );
-    }
-    fs.writeFileSync(cfgPath, JSON.stringify(cfg, null, 2));
-    process.stdout.write(String(models.length));
-  " "$HOME/.hermes/hermes.json" "openai" "$([ -z "${HERMES_AGENT_MODELS_JSON:-}" ] && [ -z "${HERMES_AGENTS_JSON:-}" ] && echo true || echo false)"); then
-    echo "  Discovered $model_count models from OpenAI"
-    echo "Models injected into config"
-    echo "  OpenAI discovered model IDs: $(node -e "
-      const fs = require('fs');
-      const cfg = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
-      const models = (((cfg || {}).models || {}).providers || {}).openai?.models || [];
-      const ids = [];
-      for (const model of models) {
-        if (typeof model === 'string') {
-          ids.push(model);
-          continue;
-        }
-        if (model && typeof model.id === 'string') ids.push(model.id);
-      }
-      process.stdout.write(ids.join(', '));
-    " "$HOME/.hermes/hermes.json")"
-    if [ -z "${HERMES_AGENT_MODELS_JSON:-}" ] && [ -z "${HERMES_AGENTS_JSON:-}" ]; then
-      agent_model_count=$(node -e "
-        const fs = require('fs');
-        const cfg = JSON.parse(fs.readFileSync(process.argv[1], 'utf8'));
-        const models = ((((cfg || {}).agents || {}).defaults || {}).models);
-        process.stdout.write(String(models && typeof models === 'object' ? Object.keys(models).length : 0));
-      " "$HOME/.hermes/hermes.json")
-      echo "  Agent model options synchronized from OpenAI provider list ($agent_model_count entries)"
-    fi
-  else
-    echo "WARN: Could not discover OpenAI models from $_openai_url (continuing with configured/default list)" >&2
-  fi
-fi
-
-if [ -n "$PLUGINS" ]; then
-  echo "==== Install Plugins ===="
-  echo "Plugins to install: $PLUGINS"
-    hermes plugins install "$PLUGINS"
+if [ -n "$OVERWRITE_CONFIG" ] || [ ! -e "${HERMES_HOME}/config.yaml" ]; then
+  cp "${HERMES_HOME}/config.yaml.rendered" "${HERMES_HOME}/config.yaml"
+  echo "config.yaml written"
 fi
 
 echo "==== Starting Hermes Gateway ===="
-exec "$@"
+exec /opt/hermes/docker/entrypoint.sh "$@"
