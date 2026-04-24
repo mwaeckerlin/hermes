@@ -1,8 +1,8 @@
 # Stage 1: build the pairing plugin frontend (Node is only needed here, not at runtime)
-FROM node:alpine AS plugin-builder
+FROM node:22-alpine AS plugin-builder
 WORKDIR /build
-COPY files/pairing-plugin/package.json .
-RUN npm install
+COPY files/pairing-plugin/package.json files/pairing-plugin/package-lock.json ./
+RUN npm ci
 COPY files/pairing-plugin/src ./src
 RUN npm run build
 
