@@ -10,7 +10,7 @@ out of the box — locally or in a cloud.
 3. run `npm start`
 4. open the dashboard: [`http://localhost:9119/`](http://localhost:9119/)
 
-Port 8642 is the OpenAI-compatible API and health endpoint (`/healthz`). The web dashboard runs as a separate service on port 9119.
+Port 8642 is the internal gateway API and health endpoint (`/healthz`) — it is **not** published to the host. The web dashboard runs as a separate service on port 9119 and is the only publicly exposed port.
 
 Or connect a chat platform (Telegram, Discord, Slack) and skip the HTTP ports entirely.
 
@@ -56,14 +56,18 @@ production data.
 ### Network Isolation
 
 - **Segregated networks** — each container pair communicates on its own internal
-  Docker network. The gateway and sandbox share `gateway-sandbox`; the sandbox
-  and the Docker-in-Docker daemon share `sandbox-dind`. No cross-network traffic.
+  Docker network. The gateway and sandbox share `gateway-sandbox`; the dashboard
+  and gateway share `dashboard-gateway` (the dashboard has **no direct access to
+  the sandbox**); the sandbox and the Docker-in-Docker daemon share `sandbox-dind`.
+  No cross-network traffic between non-adjacent tiers.
 - **Network encryption** (production) — encrypt overlay networks when deploying
   to Docker Swarm: set `networks.<name>.driver_opts.encrypted: "true"` on each
   network, or add a service mesh.
-- **Minimal port exposure** — only port 8642 (gateway API) is published for local
-  testing. If you use a chat platform such as Telegram you can close that port
-  entirely. *Do not expose port 8642 to the Internet without a TLS reverse proxy.*
+- **Minimal port exposure** — only port 9119 (dashboard) is published. The
+  gateway port 8642 is internal only, reachable solely via the `dashboard-gateway`
+  network. If you use a chat platform such as Telegram you can close port 9119
+  as well. *Do not expose port 9119 to the Internet without a TLS reverse proxy
+  and authentication.*
 
 ### Secrets
 
@@ -72,9 +76,25 @@ production data.
   the filename, and exports it as an environment variable. Example:
   `/run/secrets/hermes_sandbox_ssh_private_key` → `HERMES_SANDBOX_SSH_PRIVATE_KEY`.
 
+### SSH Trust Assumptions
+
+The gateway connects to the sandbox over SSH using `StrictHostKeyChecking=no`.
+This is intentional and acceptable because:
+
+- Both containers share an internal Docker network (`gateway-sandbox`) that is
+  not reachable from outside Docker.
+- The security boundary is Docker network isolation, not SSH host key
+  verification. Trusting Docker's internal networking is consistent with the
+  overall threat model.
+- For multi-host deployments (Docker Swarm), enable overlay network encryption
+  (see [Network Isolation](#network-isolation) above) to protect traffic in transit.
+
+Do **not** rely on SSH host key verification to protect against a compromised
+Docker host — that is outside the scope of this design.
+
 ### Docker-in-Docker
 
-Optional isolated Docker daemon for the sandbox. Gives the agent full root inside
+The `hermes-dind` service provides an isolated Docker daemon for the sandbox. Gives the agent full root inside
 the DinD container. The host Docker daemon is completely separate.
 
 ## Full Architecture
@@ -168,11 +188,13 @@ npm start
 npm run start:daemon
 ```
 
-Gateway API / health: `http://localhost:8642/healthz`  
 Dashboard (web UI): `http://localhost:9119/`
 
-**Local / trusted-network use only.** Do not expose these ports to the Internet
-without a TLS reverse proxy.
+The gateway API/health endpoint (`http://hermes-gateway:8642/healthz`) is
+internal only — accessible within Docker but not published to the host.
+
+**Local / trusted-network use only.** Do not expose the dashboard port to the
+Internet without a TLS reverse proxy and authentication.
 
 ## Full Configuration Guide
 
@@ -371,12 +393,13 @@ docker compose exec hermes-gateway cat /opt/data/config.yaml
 docker compose exec hermes-gateway vi /opt/data/config.yaml
 ```
 
-## Docker-in-Docker (Optional)
+## Docker-in-Docker
 
 The `hermes-dind` service provides an isolated Docker daemon for the sandbox.
-Set `DOCKER_HOST=tcp://hermes-dind:2375` in the sandbox (already configured).
-Remove the `hermes-dind` service and the `DOCKER_HOST` environment variable
-from the sandbox if you don't need it.
+`DOCKER_HOST=tcp://hermes-dind:2375` is already configured in the sandbox
+container. To disable DinD, comment out the `hermes-dind` service and remove
+the `DOCKER_HOST` environment variable and the `depends_on` entry from the
+sandbox service.
 
 **Who needs this?** Developers and DevOps engineers who want Hermes to build,
 run, and test containerized applications. For general use (writing, research,
@@ -395,8 +418,7 @@ Docker-in-Docker is therefore not supported in Swarm mode.
 ## Production Checklist
 
 - [ ] All secrets via `docker secret`, not environment variables
-- [ ] Encrypted overlay network (`--opt encrypted`)
-- [ ] Port 8642 behind TLS reverse proxy (nginx, Traefik, Kong) — or not exposed at all when using only chat platforms
-- [ ] Port 9119 (dashboard) behind TLS reverse proxy with authentication — or not exposed publicly
+- [ ] Encrypted overlay networks (uncomment `driver_opts: encrypted: "true"` in `docker-compose.yml`)
+- [ ] Port 9119 (dashboard) behind TLS reverse proxy with authentication — or not exposed publicly (not needed when using only chat platforms)
 - [ ] `GATEWAY_ALLOW_ALL_USERS=false` (default) or explicit `TELEGRAM_ALLOWED_USERS`/`DISCORD_*` allowlists
-- [ ] Firewall restricts access to gateway and dashboard ports
+- [ ] Firewall restricts access to the dashboard port

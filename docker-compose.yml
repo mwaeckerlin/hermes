@@ -7,6 +7,8 @@ services:
     depends_on:
       hermes-sandbox:
         condition: service_healthy
+      allow-write-access:
+        condition: service_started
     environment:
       # ── SSH key for sandbox (required) ─────────────────────────────────────
       HERMES_SANDBOX_SSH_PRIVATE_KEY: ${HERMES_SANDBOX_SSH_PRIVATE_KEY}
@@ -117,14 +119,13 @@ services:
       HERMES_HUMAN_DELAY_MODE: ${HERMES_HUMAN_DELAY_MODE:-off}
     volumes:
       - hermes-data:/opt/data
-    ports:
-      - "${HERMES_GATEWAY_PORT:-8642}:8642"
     init: true
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
     networks:
       - gateway-sandbox
+      - dashboard-gateway
 
   hermes-dashboard:
     image: mwaeckerlin/hermes:dashboard
@@ -147,7 +148,7 @@ services:
       - no-new-privileges:true
     restart: unless-stopped
     networks:
-      - gateway-sandbox
+      - dashboard-gateway
 
   hermes-sandbox:
     image: mwaeckerlin/hermes:sandbox
@@ -162,27 +163,41 @@ services:
     security_opt:
       - no-new-privileges:true
     pids_limit: 256
-    #depends_on:
-    #  hermes-dind:
-    #    condition: service_started
+    depends_on:
+      hermes-dind:
+        condition: service_started
     restart: unless-stopped
     networks:
       - gateway-sandbox
       - sandbox-dind
 
-  #hermes-dind:
-  #  image: docker:dind
-  #  privileged: true
-  #  environment:
-  #    DOCKER_TLS_CERTDIR: ""
-  #  volumes:
-  #    - hermes-docker:/var/lib/docker
-  #  restart: unless-stopped
-  #  networks:
-  #    - sandbox-dind
+  hermes-dind:
+    image: docker:dind
+    privileged: true
+    environment:
+      DOCKER_TLS_CERTDIR: ""
+    volumes:
+      - hermes-docker:/var/lib/docker
+    restart: unless-stopped
+    networks:
+      - sandbox-dind
+
+  allow-write-access:
+    image: mwaeckerlin/allow-write-access
+    environment:
+      ALLOW_USER: "chown -R 1000:1000"
+    volumes:
+      - hermes-data:/app
 
 networks:
   gateway-sandbox:
+    # For production Docker Swarm deployments, enable overlay encryption:
+    # driver_opts:
+    #   encrypted: "true"
+  dashboard-gateway:
+    # For production Docker Swarm deployments, enable overlay encryption:
+    # driver_opts:
+    #   encrypted: "true"
   sandbox-dind:
 
 volumes:
