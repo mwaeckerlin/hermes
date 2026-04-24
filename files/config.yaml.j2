@@ -38,14 +38,14 @@ terminal:
   # Connection target: hermes-sandbox container, user 'somebody'
   ssh_host: "{{ HERMES_TERMINAL_SSH_HOST | default('hermes-sandbox') }}"
   ssh_user: "{{ HERMES_TERMINAL_SSH_USER | default('somebody') }}"
-  ssh_port: {{ HERMES_TERMINAL_SSH_PORT | default('22') | int }}
+  ssh_port: {{ HERMES_TERMINAL_SSH_PORT | default('22', true) | int }}
   # SSH key is written to $HERMES_HOME/.ssh/hermes-sandbox by entrypoint.sh;
   # use the absolute path from TERMINAL_SSH_KEY (set before rendering) so that
   # tilde-expansion to the hermes user's home directory does not break lookups.
   ssh_key: "{{ TERMINAL_SSH_KEY }}"
   cwd: "~"
-  timeout: {{ HERMES_TERMINAL_TIMEOUT | default('180') | int }}
-  lifetime_seconds: {{ HERMES_TERMINAL_LIFETIME | default('300') | int }}
+  timeout: {{ HERMES_TERMINAL_TIMEOUT | default('180', true) | int }}
+  lifetime_seconds: {{ HERMES_TERMINAL_LIFETIME | default('300', true) | int }}
 {% endif %}
 
 # =============================================================================
@@ -58,7 +58,7 @@ compression:
   enabled: {{ HERMES_COMPRESSION_ENABLED | default('true') }}
   threshold: {{ HERMES_COMPRESSION_THRESHOLD | default('0.50') }}
   target_ratio: {{ HERMES_COMPRESSION_TARGET_RATIO | default('0.20') }}
-  protect_last_n: {{ HERMES_COMPRESSION_PROTECT_LAST_N | default('20') | int }}
+  protect_last_n: {{ HERMES_COMPRESSION_PROTECT_LAST_N | default('20', true) | int }}
 {% endif %}
 
 # =============================================================================
@@ -138,10 +138,10 @@ memory: {{ HERMES_MEMORY_YAML }}
 memory:
   memory_enabled: {{ HERMES_MEMORY_ENABLED | default('true') }}
   user_profile_enabled: {{ HERMES_USER_PROFILE_ENABLED | default('true') }}
-  memory_char_limit: {{ HERMES_MEMORY_CHAR_LIMIT | default('2200') | int }}
-  user_char_limit: {{ HERMES_USER_CHAR_LIMIT | default('1375') | int }}
-  nudge_interval: {{ HERMES_MEMORY_NUDGE_INTERVAL | default('10') | int }}
-  flush_min_turns: {{ HERMES_MEMORY_FLUSH_MIN_TURNS | default('6') | int }}
+  memory_char_limit: {{ HERMES_MEMORY_CHAR_LIMIT | default('2200', true) | int }}
+  user_char_limit: {{ HERMES_USER_CHAR_LIMIT | default('1375', true) | int }}
+  nudge_interval: {{ HERMES_MEMORY_NUDGE_INTERVAL | default('10', true) | int }}
+  flush_min_turns: {{ HERMES_MEMORY_FLUSH_MIN_TURNS | default('6', true) | int }}
 {% endif %}
 
 # =============================================================================
@@ -152,8 +152,8 @@ session_reset: {{ HERMES_SESSION_RESET_YAML }}
 {% else %}
 session_reset:
   mode: "{{ HERMES_SESSION_RESET_MODE | default('both') }}"
-  idle_minutes: {{ HERMES_SESSION_RESET_IDLE_MINUTES | default('1440') | int }}
-  at_hour: {{ HERMES_SESSION_RESET_AT_HOUR | default('4') | int }}
+  idle_minutes: {{ HERMES_SESSION_RESET_IDLE_MINUTES | default('1440', true) | int }}
+  at_hour: {{ HERMES_SESSION_RESET_AT_HOUR | default('4', true) | int }}
 {% endif %}
 
 group_sessions_per_user: {{ HERMES_GROUP_SESSIONS_PER_USER | default('true') }}
@@ -168,7 +168,7 @@ streaming:
   enabled: {{ HERMES_STREAMING_ENABLED | default('false') }}
 {% if HERMES_STREAMING_ENABLED | default('') == 'true' %}
   edit_interval: {{ HERMES_STREAMING_EDIT_INTERVAL | default('0.3') }}
-  buffer_threshold: {{ HERMES_STREAMING_BUFFER_THRESHOLD | default('40') | int }}
+  buffer_threshold: {{ HERMES_STREAMING_BUFFER_THRESHOLD | default('40', true) | int }}
 {% endif %}
 {% endif %}
 
@@ -179,7 +179,7 @@ streaming:
 skills: {{ HERMES_SKILLS_YAML }}
 {% else %}
 skills:
-  creation_nudge_interval: {{ HERMES_SKILLS_NUDGE_INTERVAL | default('15') | int }}
+  creation_nudge_interval: {{ HERMES_SKILLS_NUDGE_INTERVAL | default('15', true) | int }}
 {% endif %}
 
 # =============================================================================
@@ -189,7 +189,7 @@ skills:
 agent: {{ HERMES_AGENT_YAML }}
 {% else %}
 agent:
-  max_turns: {{ HERMES_MAX_TURNS | default('60') | int }}
+  max_turns: {{ HERMES_MAX_TURNS | default('60', true) | int }}
   verbose: {{ HERMES_AGENT_VERBOSE | default('false') }}
 {% if HERMES_REASONING_EFFORT | default('') %}
   reasoning_effort: "{{ HERMES_REASONING_EFFORT }}"
@@ -263,8 +263,8 @@ tts:
 # hard-coded and cannot be overridden via environment variables.
 code_execution:
   enabled: false
-  timeout: {{ HERMES_CODE_EXECUTION_TIMEOUT | default('300') | int }}
-  max_tool_calls: {{ HERMES_CODE_EXECUTION_MAX_TOOL_CALLS | default('50') | int }}
+  timeout: {{ HERMES_CODE_EXECUTION_TIMEOUT | default('300', true) | int }}
+  max_tool_calls: {{ HERMES_CODE_EXECUTION_MAX_TOOL_CALLS | default('50', true) | int }}
 
 # =============================================================================
 # Subagent Delegation
@@ -273,7 +273,7 @@ code_execution:
 delegation: {{ HERMES_DELEGATION_YAML }}
 {% else %}
 delegation:
-  max_iterations: {{ HERMES_DELEGATION_MAX_ITERATIONS | default('50') | int }}
+  max_iterations: {{ HERMES_DELEGATION_MAX_ITERATIONS | default('50', true) | int }}
 {% if HERMES_DELEGATION_MAX_CONCURRENT | default('') %}
   max_concurrent_children: {{ HERMES_DELEGATION_MAX_CONCURRENT | int }}
 {% endif %}
@@ -322,9 +322,9 @@ file_read_max_chars: {{ HERMES_FILE_READ_MAX_CHARS | int }}
 tool_output: {{ HERMES_TOOL_OUTPUT_YAML }}
 {% elif HERMES_TOOL_OUTPUT_MAX_BYTES | default('') or HERMES_TOOL_OUTPUT_MAX_LINES | default('') or HERMES_TOOL_OUTPUT_MAX_LINE_LENGTH | default('') %}
 tool_output:
-  max_bytes: {{ HERMES_TOOL_OUTPUT_MAX_BYTES | default('50000') | int }}
-  max_lines: {{ HERMES_TOOL_OUTPUT_MAX_LINES | default('2000') | int }}
-  max_line_length: {{ HERMES_TOOL_OUTPUT_MAX_LINE_LENGTH | default('2000') | int }}
+  max_bytes: {{ HERMES_TOOL_OUTPUT_MAX_BYTES | default('50000', true) | int }}
+  max_lines: {{ HERMES_TOOL_OUTPUT_MAX_LINES | default('2000', true) | int }}
+  max_line_length: {{ HERMES_TOOL_OUTPUT_MAX_LINE_LENGTH | default('2000', true) | int }}
 {% endif %}
 
 # =============================================================================
@@ -358,7 +358,7 @@ web:
 browser: {{ HERMES_BROWSER_YAML }}
 {% else %}
 browser:
-  inactivity_timeout: {{ HERMES_BROWSER_INACTIVITY_TIMEOUT | default('120') | int }}
+  inactivity_timeout: {{ HERMES_BROWSER_INACTIVITY_TIMEOUT | default('120', true) | int }}
 {% if HERMES_BROWSER_COMMAND_TIMEOUT | default('') %}
   command_timeout: {{ HERMES_BROWSER_COMMAND_TIMEOUT | int }}
 {% endif %}
@@ -387,7 +387,7 @@ voice: {{ HERMES_VOICE_YAML }}
 {% elif HERMES_VOICE_AUTO_TTS | default('') or HERMES_VOICE_MAX_RECORDING_SECONDS | default('') %}
 voice:
   auto_tts: {{ HERMES_VOICE_AUTO_TTS | default('false') }}
-  max_recording_seconds: {{ HERMES_VOICE_MAX_RECORDING_SECONDS | default('120') | int }}
+  max_recording_seconds: {{ HERMES_VOICE_MAX_RECORDING_SECONDS | default('120', true) | int }}
 {% endif %}
 
 # =============================================================================
@@ -400,8 +400,8 @@ human_delay: {{ HERMES_HUMAN_DELAY_YAML }}
 human_delay:
   mode: "{{ HERMES_HUMAN_DELAY_MODE }}"
 {% if HERMES_HUMAN_DELAY_MODE | default('off') != 'off' %}
-  min_ms: {{ HERMES_HUMAN_DELAY_MIN_MS | default('800') | int }}
-  max_ms: {{ HERMES_HUMAN_DELAY_MAX_MS | default('2500') | int }}
+  min_ms: {{ HERMES_HUMAN_DELAY_MIN_MS | default('800', true) | int }}
+  max_ms: {{ HERMES_HUMAN_DELAY_MAX_MS | default('2500', true) | int }}
 {% endif %}
 {% endif %}
 
