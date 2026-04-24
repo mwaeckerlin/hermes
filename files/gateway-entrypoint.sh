@@ -3,10 +3,16 @@
 HERMES_HOME="${HERMES_HOME:-/opt/data}"
 
 echo "==== Reading Docker Secrets ===="
+_ssh_key_from_secret=false
 for secret in /run/secrets/*; do
   test -e "$secret" || continue
   varname=$(basename "$secret" | tr '[:lower:]-' '[:upper:]_')
-  echo "Setting $varname from $secret"
+  if [ "$varname" = "HERMES_SANDBOX_SSH_PRIVATE_KEY" ]; then
+    echo "Setting SSH private key from secret"
+    _ssh_key_from_secret=true
+  else
+    echo "$varname from secret"
+  fi
   export "$varname=$(sed -z 's/\n/\\n/g' "$secret")"
 done
 
@@ -20,7 +26,7 @@ if [ -n "$LITELLM_BASE_URL" ]; then
     export HERMES_MODEL_BASE_URL="${HERMES_MODEL_BASE_URL:-$LITELLM_BASE_URL}"
     # LiteLLM uses the OpenAI wire protocol; supply the key via OPENAI_API_KEY.
     if [ -n "$LITELLM_API_KEY" ]; then
-      export OPENAI_API_KEY="${OPENAI_API_KEY:-$LITELLM_API_KEY}"
+      export OPENAI_API_KEY="${LITELLM_API_KEY}"
     fi
     echo "LiteLLM provider configured: $LITELLM_BASE_URL"
   fi
@@ -90,16 +96,31 @@ if [ -z "$HERMES_DEFAULT_MODEL" ]; then
 fi
 
 echo "==== Setting Up SSH Key for Sandbox ===="
-if [ -z "$HERMES_SANDBOX_SSH_PRIVATE_KEY" ]; then
+if [ -z "${HERMES_SANDBOX_SSH_PRIVATE_KEY:-}" ]; then
   echo "ERROR: HERMES_SANDBOX_SSH_PRIVATE_KEY is not set." >&2
   echo "       Provide it as an environment variable or as Docker secret hermes_sandbox_ssh_private_key." >&2
   exit 1
 fi
+if [ "$_ssh_key_from_secret" != "true" ]; then
+  echo "Setting SSH private key from environment"
+fi
 mkdir -p "${HERMES_HOME}/.ssh"
 printf '%b' "${HERMES_SANDBOX_SSH_PRIVATE_KEY}" | tr -d '\r' > "${HERMES_HOME}/.ssh/hermes-sandbox"
+# Disable host key checking for the sandbox: the container gets a fresh host key
+# on every restart, so strict checking would always fail.  This is safe because
+# the sandbox is on a private Docker overlay network (gateway-sandbox) that is
+# not reachable from outside the Compose stack.
+_ssh_host="${HERMES_TERMINAL_SSH_HOST:-hermes-sandbox}"
+cat > "${HERMES_HOME}/.ssh/config" <<EOF
+Host ${_ssh_host}
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    IdentityFile ${HERMES_HOME}/.ssh/hermes-sandbox
+EOF
 chown -R hermes:hermes "${HERMES_HOME}/.ssh"
 chmod 700 "${HERMES_HOME}/.ssh"
 chmod 600 "${HERMES_HOME}/.ssh/hermes-sandbox"
+chmod 600 "${HERMES_HOME}/.ssh/config"
 # TERMINAL_SSH_KEY is the env var Hermes reads for the SSH private key path.
 export TERMINAL_SSH_KEY="${HERMES_HOME}/.ssh/hermes-sandbox"
 
@@ -109,11 +130,16 @@ echo "==== Rendering Jinja2 Configuration ===="
   "${HERMES_HOME}/config.yaml.rendered"
 
 echo "==== Configuring Hermes ===="
-# Always write the freshly rendered config so that template fixes and env-var
-# changes take effect on every container restart, even when the persistent
-# volume already contains a config.yaml from a previous run.
-cp "${HERMES_HOME}/config.yaml.rendered" "${HERMES_HOME}/config.yaml"
-echo "config.yaml written"
+# Copy the freshly rendered config to config.yaml when:
+#   - OVERWRITE_CONFIG is set (admin-forced refresh), or
+#   - config.yaml does not exist yet (first start).
+# Leave the file untouched on subsequent starts to preserve user edits.
+if [ -n "${OVERWRITE_CONFIG:-}" ] || [ ! -e "${HERMES_HOME}/config.yaml" ]; then
+  cp "${HERMES_HOME}/config.yaml.rendered" "${HERMES_HOME}/config.yaml"
+  echo "config.yaml written"
+else
+  echo "config.yaml preserved (set OVERWRITE_CONFIG=true to regenerate)"
+fi
 
 echo "==== Redirecting PID and Lock Files to /tmp ===="
 # gateway.pid and gateway.lock must not live in the persistent volume — stale
