@@ -1,0 +1,11 @@
+FROM nousresearch/hermes-agent:latest
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends openssh-client && rm -rf /var/lib/apt/lists/*
+COPY --chown=hermes:hermes files/SKILL.md /opt/hermes/skills/ssh-sandbox/SKILL.md
+COPY files/config.yaml.j2 /config.yaml.j2.default
+COPY files/render-config.py /render-config.py
+COPY --chmod=0755 files/gateway-entrypoint.sh /entrypoint.sh
+HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=60 \
+  CMD /opt/hermes/.venv/bin/python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8642/healthz', timeout=5)"
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["gateway", "run"]

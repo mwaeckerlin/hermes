@@ -1,0 +1,191 @@
+services:
+  hermes-gateway:
+    image: mwaeckerlin/hermes:gateway
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    depends_on:
+      hermes-sandbox:
+        condition: service_healthy
+    environment:
+      # ── SSH key for sandbox (required) ─────────────────────────────────────
+      HERMES_SANDBOX_SSH_PRIVATE_KEY: ${HERMES_SANDBOX_SSH_PRIVATE_KEY}
+      # ── Config control ─────────────────────────────────────────────────────
+      # OVERWRITE_CONFIG=true: re-render and overwrite config.yaml on every start.
+      # Leave unset to preserve user edits in the hermes-data volume.
+      OVERWRITE_CONFIG: ${OVERWRITE_CONFIG:-}
+      # Override auto-selected default model (e.g. "anthropic/claude-opus-4.6")
+      HERMES_DEFAULT_MODEL: ${HERMES_DEFAULT_MODEL:-}
+      # ── LLM providers (all optional, set one or more) ──────────────────────
+      # OpenRouter: access to 300+ models via one key (recommended)
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      # Direct provider keys (used when the corresponding provider is selected)
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      # LiteLLM proxy (OpenAI-compatible custom endpoint, e.g. self-hosted models)
+      LITELLM_BASE_URL: ${LITELLM_BASE_URL:-}
+      LITELLM_API_KEY: ${LITELLM_API_KEY:-}
+      LITELLM_DEFAULT_MODEL: ${LITELLM_DEFAULT_MODEL:-}
+      # ── Messaging channels (leave empty to disable) ─────────────────────────
+      # Telegram: set TELEGRAM_BOT_TOKEN to enable. Get token from @BotFather.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_ALLOWED_USERS: ${TELEGRAM_ALLOWED_USERS:-}
+      TELEGRAM_HOME_CHANNEL: ${TELEGRAM_HOME_CHANNEL:-}
+      TELEGRAM_WEBHOOK_URL: ${TELEGRAM_WEBHOOK_URL:-}
+      TELEGRAM_WEBHOOK_PORT: ${TELEGRAM_WEBHOOK_PORT:-}
+      TELEGRAM_WEBHOOK_SECRET: ${TELEGRAM_WEBHOOK_SECRET:-}
+      # WhatsApp: set WHATSAPP_ENABLED=true and run `hermes whatsapp` to pair.
+      WHATSAPP_ENABLED: ${WHATSAPP_ENABLED:-}
+      WHATSAPP_ALLOWED_USERS: ${WHATSAPP_ALLOWED_USERS:-}
+      # Discord: set DISCORD_BOT_TOKEN to enable.
+      DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:-}
+      # Slack: set both SLACK_BOT_TOKEN and SLACK_APP_TOKEN to enable.
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_APP_TOKEN: ${SLACK_APP_TOKEN:-}
+      SLACK_ALLOWED_USERS: ${SLACK_ALLOWED_USERS:-}
+      # Gateway-wide open access (false = allowlist only)
+      GATEWAY_ALLOW_ALL_USERS: ${GATEWAY_ALLOW_ALL_USERS:-true}
+      # ── Tool API keys ────────────────────────────────────────────────────────
+      # Voice transcription (Whisper) and OpenAI TTS
+      # Defaults to OPENAI_API_KEY if unset (handled by entrypoint).
+      VOICE_TOOLS_OPENAI_KEY: ${VOICE_TOOLS_OPENAI_KEY:-}
+      # Web search / content extraction
+      EXA_API_KEY: ${EXA_API_KEY:-}
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
+      PARALLEL_API_KEY: ${PARALLEL_API_KEY:-}
+      # Image generation (fal.ai)
+      FAL_KEY: ${FAL_KEY:-}
+      # Browser automation (Browserbase cloud)
+      BROWSERBASE_API_KEY: ${BROWSERBASE_API_KEY:-}
+      BROWSERBASE_PROJECT_ID: ${BROWSERBASE_PROJECT_ID:-}
+      # ElevenLabs TTS
+      ELEVENLABS_API_KEY: ${ELEVENLABS_API_KEY:-}
+      # GitHub (Skills Hub + higher API rate limits)
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      # Groq (free-tier Whisper STT)
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      # ── config.yaml section overrides (JSON strings, JSON is valid YAML) ────
+      # Replace entire config.yaml sections. Rarely needed — adjust individual
+      # HERMES_* variables above first.
+      HERMES_MODEL_YAML: ${HERMES_MODEL_YAML:-}
+      HERMES_TERMINAL_YAML: ${HERMES_TERMINAL_YAML:-}
+      HERMES_COMPRESSION_YAML: ${HERMES_COMPRESSION_YAML:-}
+      HERMES_AUXILIARY_YAML: ${HERMES_AUXILIARY_YAML:-}
+      HERMES_MEMORY_YAML: ${HERMES_MEMORY_YAML:-}
+      HERMES_SESSION_RESET_YAML: ${HERMES_SESSION_RESET_YAML:-}
+      HERMES_STREAMING_YAML: ${HERMES_STREAMING_YAML:-}
+      HERMES_SKILLS_YAML: ${HERMES_SKILLS_YAML:-}
+      HERMES_AGENT_YAML: ${HERMES_AGENT_YAML:-}
+      HERMES_PLATFORM_TOOLSETS_YAML: ${HERMES_PLATFORM_TOOLSETS_YAML:-}
+      HERMES_STT_YAML: ${HERMES_STT_YAML:-}
+      HERMES_DELEGATION_YAML: ${HERMES_DELEGATION_YAML:-}
+      HERMES_MCP_SERVERS_YAML: ${HERMES_MCP_SERVERS_YAML:-}
+      HERMES_DISPLAY_YAML: ${HERMES_DISPLAY_YAML:-}
+      # ── Individual config.yaml setting overrides ────────────────────────────
+      HERMES_MODEL_PROVIDER: ${HERMES_MODEL_PROVIDER:-}
+      HERMES_MODEL_BASE_URL: ${HERMES_MODEL_BASE_URL:-}
+      HERMES_MAX_TURNS: ${HERMES_MAX_TURNS:-}
+      HERMES_GATEWAY_TIMEOUT: ${HERMES_GATEWAY_TIMEOUT:-}
+      HERMES_GATEWAY_TIMEOUT_WARNING: ${HERMES_GATEWAY_TIMEOUT_WARNING:-}
+      HERMES_GATEWAY_DRAIN_TIMEOUT: ${HERMES_GATEWAY_DRAIN_TIMEOUT:-}
+      HERMES_REASONING_EFFORT: ${HERMES_REASONING_EFFORT:-}
+      HERMES_AGENT_VERBOSE: ${HERMES_AGENT_VERBOSE:-}
+      HERMES_COMPRESSION_ENABLED: ${HERMES_COMPRESSION_ENABLED:-}
+      HERMES_COMPRESSION_THRESHOLD: ${HERMES_COMPRESSION_THRESHOLD:-}
+      HERMES_MEMORY_ENABLED: ${HERMES_MEMORY_ENABLED:-}
+      HERMES_USER_PROFILE_ENABLED: ${HERMES_USER_PROFILE_ENABLED:-}
+      HERMES_SESSION_RESET_MODE: ${HERMES_SESSION_RESET_MODE:-}
+      HERMES_SESSION_RESET_IDLE_MINUTES: ${HERMES_SESSION_RESET_IDLE_MINUTES:-}
+      HERMES_GROUP_SESSIONS_PER_USER: ${HERMES_GROUP_SESSIONS_PER_USER:-}
+      HERMES_STREAMING_ENABLED: ${HERMES_STREAMING_ENABLED:-}
+      HERMES_SKILLS_NUDGE_INTERVAL: ${HERMES_SKILLS_NUDGE_INTERVAL:-}
+      HERMES_STT_ENABLED: ${HERMES_STT_ENABLED:-}
+      HERMES_DISPLAY_TOOL_PROGRESS: ${HERMES_DISPLAY_TOOL_PROGRESS:-}
+      HERMES_DISPLAY_COMPACT: ${HERMES_DISPLAY_COMPACT:-}
+      HERMES_DISPLAY_SKIN: ${HERMES_DISPLAY_SKIN:-}
+      # ── SSH terminal settings (normally set via config.yaml.j2 defaults) ────
+      # Override here only if connecting to a different sandbox.
+      HERMES_TERMINAL_SSH_HOST: ${HERMES_TERMINAL_SSH_HOST:-}
+      HERMES_TERMINAL_SSH_USER: ${HERMES_TERMINAL_SSH_USER:-}
+      HERMES_TERMINAL_SSH_PORT: ${HERMES_TERMINAL_SSH_PORT:-}
+      HERMES_TERMINAL_TIMEOUT: ${HERMES_TERMINAL_TIMEOUT:-}
+      # ── Debug ────────────────────────────────────────────────────────────────
+      WEB_TOOLS_DEBUG: ${WEB_TOOLS_DEBUG:-false}
+      VISION_TOOLS_DEBUG: ${VISION_TOOLS_DEBUG:-false}
+      HERMES_HUMAN_DELAY_MODE: ${HERMES_HUMAN_DELAY_MODE:-off}
+    volumes:
+      - hermes-data:/opt/data
+    ports:
+      - "${HERMES_GATEWAY_PORT:-8642}:8642"
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks:
+      - gateway-sandbox
+
+  hermes-dashboard:
+    image: mwaeckerlin/hermes:dashboard
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    command: ["dashboard", "--host", "0.0.0.0", "--insecure"]
+    depends_on:
+      hermes-gateway:
+        condition: service_started
+    environment:
+      GATEWAY_HEALTH_URL: http://hermes-gateway:8642
+      GATEWAY_HEALTH_TIMEOUT: ${GATEWAY_HEALTH_TIMEOUT:-3}
+    volumes:
+      - hermes-data:/opt/data
+    ports:
+      - "${HERMES_DASHBOARD_PORT:-9119}:9119"
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks:
+      - gateway-sandbox
+
+  hermes-sandbox:
+    image: mwaeckerlin/hermes:sandbox
+    build:
+      context: .
+      dockerfile: Dockerfile.sandbox
+    environment:
+      HERMES_SANDBOX_SSH_PUBLIC_KEY: ${HERMES_SANDBOX_SSH_PUBLIC_KEY}
+      DOCKER_HOST: tcp://hermes-dind:2375
+    volumes:
+      - hermes-workspace:/home/somebody
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    #depends_on:
+    #  hermes-dind:
+    #    condition: service_started
+    restart: unless-stopped
+    networks:
+      - gateway-sandbox
+      - sandbox-dind
+
+  #hermes-dind:
+  #  image: docker:dind
+  #  privileged: true
+  #  environment:
+  #    DOCKER_TLS_CERTDIR: ""
+  #  volumes:
+  #    - hermes-docker:/var/lib/docker
+  #  restart: unless-stopped
+  #  networks:
+  #    - sandbox-dind
+
+networks:
+  gateway-sandbox:
+  sandbox-dind:
+
+volumes:
+  hermes-data:
+  hermes-workspace:
+  hermes-docker:
