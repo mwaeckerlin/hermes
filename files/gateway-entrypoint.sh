@@ -106,9 +106,21 @@ if [ "$_ssh_key_from_secret" != "true" ]; then
 fi
 mkdir -p "${HERMES_HOME}/.ssh"
 printf '%b' "${HERMES_SANDBOX_SSH_PRIVATE_KEY}" | tr -d '\r' > "${HERMES_HOME}/.ssh/hermes-sandbox"
+# Disable host key checking for the sandbox: the container gets a fresh host key
+# on every restart, so strict checking would always fail.  This is safe because
+# the sandbox is on a private Docker overlay network (gateway-sandbox) that is
+# not reachable from outside the Compose stack.
+_ssh_host="${HERMES_TERMINAL_SSH_HOST:-hermes-sandbox}"
+cat > "${HERMES_HOME}/.ssh/config" <<EOF
+Host ${_ssh_host}
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    IdentityFile ${HERMES_HOME}/.ssh/hermes-sandbox
+EOF
 chown -R hermes:hermes "${HERMES_HOME}/.ssh"
 chmod 700 "${HERMES_HOME}/.ssh"
 chmod 600 "${HERMES_HOME}/.ssh/hermes-sandbox"
+chmod 600 "${HERMES_HOME}/.ssh/config"
 # TERMINAL_SSH_KEY is the env var Hermes reads for the SSH private key path.
 export TERMINAL_SSH_KEY="${HERMES_HOME}/.ssh/hermes-sandbox"
 
