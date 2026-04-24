@@ -66,10 +66,13 @@ if [ -z "$HERMES_DEFAULT_MODEL" ]; then
   elif [ -n "$GOOGLE_API_KEY" ] || [ -n "$GEMINI_API_KEY" ]; then
     export HERMES_DEFAULT_MODEL="gemini/gemini-2.5-pro"
   elif [ -n "$OPENAI_API_KEY" ]; then
-    # Use the bare model name (no provider prefix) so hermes routes to OpenAI
-    # directly via OPENAI_API_KEY.  The slash format "openai/gpt-4o" is the
-    # OpenRouter model-path convention and would be misrouted to OpenRouter.
+    # Hermes's "auto" provider only tries OpenRouter → Nous → Codex and will
+    # never reach OPENAI_API_KEY.  Use provider=custom with the OpenAI base URL
+    # so requests go directly to api.openai.com (OPENAI_API_KEY is picked up
+    # automatically by the custom endpoint auth chain).
     export HERMES_DEFAULT_MODEL="gpt-4o"
+    export HERMES_MODEL_PROVIDER="${HERMES_MODEL_PROVIDER:-custom}"
+    export HERMES_MODEL_BASE_URL="${HERMES_MODEL_BASE_URL:-https://api.openai.com/v1}"
   elif [ -n "$LITELLM_BASE_URL" ]; then
     export HERMES_DEFAULT_MODEL="${LITELLM_DEFAULT_MODEL:-gpt-4o}"
   fi
