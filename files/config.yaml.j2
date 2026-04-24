@@ -399,7 +399,7 @@ human_delay: {{ HERMES_HUMAN_DELAY_YAML }}
 {% elif HERMES_HUMAN_DELAY_MODE | default('') %}
 human_delay:
   mode: "{{ HERMES_HUMAN_DELAY_MODE }}"
-{% if HERMES_HUMAN_DELAY_MODE != 'off' %}
+{% if HERMES_HUMAN_DELAY_MODE | default('off') != 'off' %}
   min_ms: {{ HERMES_HUMAN_DELAY_MIN_MS | default('800') | int }}
   max_ms: {{ HERMES_HUMAN_DELAY_MAX_MS | default('2500') | int }}
 {% endif %}
@@ -420,11 +420,12 @@ prompt_caching:
 # =============================================================================
 # OpenRouter Provider Routing
 # =============================================================================
-# Only active when OPENROUTER_API_KEY is set.
+# Controls how requests are routed across OpenRouter providers.
 # sort: "price" (default) | "throughput" | "latency"
+# Only meaningful when OPENROUTER_API_KEY is set; silently ignored otherwise.
 {% if HERMES_PROVIDER_ROUTING_YAML | default('') %}
 provider_routing: {{ HERMES_PROVIDER_ROUTING_YAML }}
-{% elif OPENROUTER_API_KEY | default('') and HERMES_PROVIDER_ROUTING_SORT | default('') %}
+{% elif HERMES_PROVIDER_ROUTING_SORT | default('') %}
 provider_routing:
   sort: "{{ HERMES_PROVIDER_ROUTING_SORT }}"
 {% endif %}

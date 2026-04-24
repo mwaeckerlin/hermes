@@ -326,7 +326,7 @@ the text. German text gets a German voice, French text gets a French voice, etc.
 |---|---|
 | `HERMES_TTS_ENABLED` | `false` to disable voice replies to voice messages (default: `true`) |
 | `HERMES_TTS_PROVIDER` | TTS provider when no API key auto-selects one (default: `microsoft`) |
-| `HERMES_TTS_MODEL_OVERRIDES_ENABLED` | `false` to disable automatic language-matched voice selection (default: `true`). `model_overrides` is the Hermes config key for per-language voice overrides. |
+| `HERMES_TTS_MODEL_OVERRIDES_ENABLED` | `false` to disable automatic language-matched voice selection (default: `true`) |
 | `HERMES_TTS_YAML` | Override the entire `tts:` section with a JSON/YAML string |
 
 **Provider auto-selection priority:**
@@ -457,7 +457,6 @@ completely replaced by setting `HERMES_<SECTION>_YAML` to a JSON string
 | `HERMES_HUMAN_DELAY_YAML` | `human_delay:` |
 | `HERMES_PROMPT_CACHING_YAML` | `prompt_caching:` |
 | `HERMES_PROVIDER_ROUTING_YAML` | `provider_routing:` |
-| `HERMES_VISION_YAML` | `auxiliary:` (shortcut — same as `HERMES_AUXILIARY_YAML`) |
 | `HERMES_CODE_EXECUTION_YAML` | `code_execution:` |
 | `HERMES_DELEGATION_YAML` | `delegation:` |
 | `HERMES_MCP_SERVERS_YAML` | `mcp_servers:` |
