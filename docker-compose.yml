@@ -16,14 +16,18 @@ services:
       OVERWRITE_CONFIG: ${OVERWRITE_CONFIG:-}
       # Override auto-selected default model (e.g. "anthropic/claude-opus-4.6")
       HERMES_DEFAULT_MODEL: ${HERMES_DEFAULT_MODEL:-}
-      # ── LLM providers (set at least one) ───────────────────────────────────
-      # Recommended: OpenRouter (access to all major models via one key)
+      # ── LLM providers (all optional, set one or more) ──────────────────────
+      # OpenRouter: access to 300+ models via one key (recommended)
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       # Direct provider keys (used when the corresponding provider is selected)
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      # LiteLLM proxy (OpenAI-compatible custom endpoint, e.g. self-hosted models)
+      LITELLM_BASE_URL: ${LITELLM_BASE_URL:-}
+      LITELLM_API_KEY: ${LITELLM_API_KEY:-}
+      LITELLM_DEFAULT_MODEL: ${LITELLM_DEFAULT_MODEL:-}
       # ── Messaging channels (leave empty to disable) ─────────────────────────
       # Telegram: set TELEGRAM_BOT_TOKEN to enable. Get token from @BotFather.
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}

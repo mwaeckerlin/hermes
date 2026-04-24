@@ -11,6 +11,35 @@ for secret in /run/secrets/*; do
 done
 
 echo "==== Setting Derived Variables ===="
+# LiteLLM proxy: exposes an OpenAI-compatible endpoint at LITELLM_BASE_URL.
+# Bridge into the slots Hermes reads when LiteLLM is the chosen provider.
+# Only applied when no higher-priority provider is available.
+if [ -n "$LITELLM_BASE_URL" ]; then
+  if [ -z "$OPENROUTER_API_KEY" ] && [ -z "$ANTHROPIC_API_KEY" ] && \
+     [ -z "$GOOGLE_API_KEY" ] && [ -z "$GEMINI_API_KEY" ] && [ -z "$OPENAI_API_KEY" ]; then
+    export HERMES_MODEL_BASE_URL="${HERMES_MODEL_BASE_URL:-$LITELLM_BASE_URL}"
+    # LiteLLM uses the OpenAI wire protocol; supply the key via OPENAI_API_KEY.
+    if [ -n "$LITELLM_API_KEY" ]; then
+      export OPENAI_API_KEY="${OPENAI_API_KEY:-$LITELLM_API_KEY}"
+    fi
+    echo "LiteLLM provider configured: $LITELLM_BASE_URL"
+  fi
+fi
+
+# Require at least one LLM provider to be configured.
+if [ -z "$OPENROUTER_API_KEY" ] && [ -z "$ANTHROPIC_API_KEY" ] && \
+   [ -z "$OPENAI_API_KEY" ] && [ -z "$GOOGLE_API_KEY" ] && \
+   [ -z "$GEMINI_API_KEY" ] && [ -z "$LITELLM_BASE_URL" ]; then
+  echo "ERROR: No LLM provider configured." >&2
+  echo "       Set at least one of:" >&2
+  echo "         OPENROUTER_API_KEY  — OpenRouter (300+ models)" >&2
+  echo "         ANTHROPIC_API_KEY   — Anthropic Claude direct" >&2
+  echo "         OPENAI_API_KEY      — OpenAI direct" >&2
+  echo "         GOOGLE_API_KEY      — Google Gemini direct" >&2
+  echo "         LITELLM_BASE_URL    — LiteLLM proxy (OpenAI-compatible)" >&2
+  exit 1
+fi
+
 # Whisper/TTS: VOICE_TOOLS_OPENAI_KEY is Hermes's real env var for voice features.
 # Fall back to OPENAI_API_KEY if not set separately.
 if [ -z "$VOICE_TOOLS_OPENAI_KEY" ] && [ -n "$OPENAI_API_KEY" ]; then
@@ -19,6 +48,8 @@ if [ -z "$VOICE_TOOLS_OPENAI_KEY" ] && [ -n "$OPENAI_API_KEY" ]; then
 fi
 
 # Auto-select default model based on available API keys (overridable via HERMES_DEFAULT_MODEL).
+# All providers are optional; multiple can be active simultaneously — the priority
+# order below only determines which model is used by default.
 if [ -z "$HERMES_DEFAULT_MODEL" ]; then
   if [ -n "$OPENROUTER_API_KEY" ]; then
     export HERMES_DEFAULT_MODEL="openrouter/anthropic/claude-opus-4.6"
@@ -26,13 +57,17 @@ if [ -z "$HERMES_DEFAULT_MODEL" ]; then
     export HERMES_DEFAULT_MODEL="anthropic/claude-opus-4.6"
   elif [ -n "$GOOGLE_API_KEY" ] || [ -n "$GEMINI_API_KEY" ]; then
     export HERMES_DEFAULT_MODEL="gemini/gemini-2.5-pro"
-  else
+  elif [ -n "$OPENAI_API_KEY" ]; then
     # Use the bare model name (no provider prefix) so hermes routes to OpenAI
     # directly via OPENAI_API_KEY.  The slash format "openai/gpt-4o" is the
     # OpenRouter model-path convention and would be misrouted to OpenRouter.
     export HERMES_DEFAULT_MODEL="gpt-4o"
+  elif [ -n "$LITELLM_BASE_URL" ]; then
+    export HERMES_DEFAULT_MODEL="${LITELLM_DEFAULT_MODEL:-gpt-4o}"
   fi
-  echo "HERMES_DEFAULT_MODEL auto-selected: $HERMES_DEFAULT_MODEL"
+  if [ -n "$HERMES_DEFAULT_MODEL" ]; then
+    echo "HERMES_DEFAULT_MODEL auto-selected: $HERMES_DEFAULT_MODEL"
+  fi
 fi
 
 echo "==== Setting Up SSH Key for Sandbox ===="

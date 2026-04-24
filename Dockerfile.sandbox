@@ -12,7 +12,7 @@ ARG CONFIGURATION_COMMANDS=" \
   "
 
 FROM mwaeckerlin/ubuntu-base AS build
-ENV CONTAINERNAME="hermes"
+ENV CONTAINERNAME    "hermes"
 ENV PACKAGES_DEV=" \
   lsb-release bash coreutils findutils grep sed gawk diffutils patch file tree \
   git git-lfs gh \

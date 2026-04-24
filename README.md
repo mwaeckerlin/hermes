@@ -199,7 +199,7 @@ Any Docker Secret is automatically available — no explicit mapping required.
 
 ### LLM Providers
 
-Set at least one. `OPENROUTER_API_KEY` is recommended (access to all major models).
+All optional — configure one or more. If none is set the gateway exits with an error on startup.
 
 | Variable | Description |
 |---|---|
@@ -207,6 +207,9 @@ Set at least one. `OPENROUTER_API_KEY` is recommended (access to all major model
 | `ANTHROPIC_API_KEY` | Direct Anthropic (Claude) |
 | `OPENAI_API_KEY` | Direct OpenAI (GPT-4o, …). Also used for Whisper/TTS if `VOICE_TOOLS_OPENAI_KEY` is unset |
 | `GOOGLE_API_KEY` / `GEMINI_API_KEY` | Google Gemini |
+| `LITELLM_BASE_URL` | LiteLLM proxy URL (OpenAI-compatible, e.g. `http://litellm:4000`) |
+| `LITELLM_API_KEY` | API key for the LiteLLM proxy (optional) |
+| `LITELLM_DEFAULT_MODEL` | Default model served by LiteLLM (default: `gpt-4o`) |
 | `HERMES_DEFAULT_MODEL` | Override auto-selected default (e.g. `anthropic/claude-opus-4.6`) |
 
 ### Messaging Channels
