@@ -311,6 +311,31 @@ shows all approved users with **Revoke** buttons. No CLI required.
 | `ELEVENLABS_API_KEY` | ElevenLabs premium TTS |
 | `GITHUB_TOKEN` | GitHub token (Skills Hub + higher rate limits) |
 
+### Text-to-Speech Configuration
+
+Hermes can reply to voice messages with a synthesized voice. By default it uses
+**Microsoft TTS** — free, no API key required. When `ELEVENLABS_API_KEY` is set,
+ElevenLabs is selected automatically for higher-quality audio.
+
+**Automatic language matching** (`model_overrides.enabled: true`, the default)
+instructs the TTS provider to select a voice that matches the detected language of
+the text. German text gets a German voice, French text gets a French voice, etc.
+
+| Variable | Description |
+|---|---|
+| `HERMES_TTS_ENABLED` | `false` to disable voice replies to voice messages (default: `true`) |
+| `HERMES_TTS_PROVIDER` | TTS provider when no API key auto-selects one (default: `microsoft`) |
+| `HERMES_TTS_MODEL_OVERRIDES_ENABLED` | `false` to disable automatic language-matched voice selection (default: `true`). `model_overrides` is the Hermes config key for per-language voice overrides. |
+| `HERMES_TTS_YAML` | Override the entire `tts:` section with a JSON/YAML string |
+
+**Provider auto-selection priority:**
+
+1. If `ELEVENLABS_API_KEY` is set → `elevenlabs`
+2. Otherwise → `microsoft` (free, no key needed)
+
+Override with `HERMES_TTS_PROVIDER` or use `HERMES_TTS_YAML` for full
+customization of the TTS section.
+
 ### config.yaml — Section-Level Overrides
 
 The gateway renders `files/config.yaml.j2` (Jinja2 template) into
@@ -330,6 +355,7 @@ completely replaced by setting `HERMES_<SECTION>_YAML` to a JSON string
 | `HERMES_AGENT_YAML` | `agent:` |
 | `HERMES_PLATFORM_TOOLSETS_YAML` | `platform_toolsets:` |
 | `HERMES_STT_YAML` | `stt:` |
+| `HERMES_TTS_YAML` | `tts:` |
 | `HERMES_CODE_EXECUTION_YAML` | `code_execution:` |
 | `HERMES_DELEGATION_YAML` | `delegation:` |
 | `HERMES_MCP_SERVERS_YAML` | `mcp_servers:` |
@@ -370,6 +396,9 @@ HERMES_PLATFORM_TOOLSETS_YAML='{"telegram":["web","terminal","file","skills","to
 | `HERMES_STREAMING_ENABLED` | `streaming.enabled` | `false` |
 | `HERMES_SKILLS_NUDGE_INTERVAL` | `skills.creation_nudge_interval` | `15` |
 | `HERMES_STT_ENABLED` | `stt.enabled` | `true` |
+| `HERMES_TTS_ENABLED` | `tts.enabled` | `true` |
+| `HERMES_TTS_PROVIDER` | `tts.provider` | `microsoft` (or `elevenlabs` if key set) |
+| `HERMES_TTS_MODEL_OVERRIDES_ENABLED` | `tts.model_overrides.enabled` | `true` |
 | `HERMES_DISPLAY_TOOL_PROGRESS` | `display.tool_progress` | `all` |
 | `HERMES_DISPLAY_COMPACT` | `display.compact` | `false` |
 | `HERMES_DISPLAY_SKIN` | `display.skin` | `default` |
