@@ -22,6 +22,7 @@ if [ -n "${DOCKER_HOST}" ]; then
   echo "DOCKER_HOST=${DOCKER_HOST}" >> /etc/environment
 fi
 chown -R ${RUN_USER}:${RUN_GROUP} ${RUN_HOME}
+chmod 755 ${RUN_HOME}
 chmod 700 ${RUN_HOME}/.ssh
 chmod 600 ${RUN_HOME}/.ssh/authorized_keys
 echo "==== Starting SSH Daemon ===="

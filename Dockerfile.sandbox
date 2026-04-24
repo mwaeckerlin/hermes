@@ -5,7 +5,9 @@ ARG CONFIGURATION_COMMANDS=" \
   -e 's/^#*KbdInteractiveAuthentication.*/KbdInteractiveAuthentication no/' \
   -e 's/^#*UsePAM.*/UsePAM yes/' \
   -e 's/^#*PermitRootLogin.*/PermitRootLogin no/' \
+  -e 's/^#*PubkeyAuthentication.*/PubkeyAuthentication yes/' \
   /etc/ssh/sshd_config \
+  && grep -q '^PubkeyAuthentication' /etc/ssh/sshd_config || echo 'PubkeyAuthentication yes' >> /etc/ssh/sshd_config \
   && mkdir -p /run/sshd \
   && adduser \${RUN_USER} docker \
   && install -m 700 -o \${RUN_USER} -g \${RUN_GROUP} /dev/null /etc/environment \

@@ -96,7 +96,7 @@ if [ -z "$HERMES_SANDBOX_SSH_PRIVATE_KEY" ]; then
   exit 1
 fi
 mkdir -p "${HERMES_HOME}/.ssh"
-printf '%b' "${HERMES_SANDBOX_SSH_PRIVATE_KEY}" > "${HERMES_HOME}/.ssh/hermes-sandbox"
+printf '%b' "${HERMES_SANDBOX_SSH_PRIVATE_KEY}" | tr -d '\r' > "${HERMES_HOME}/.ssh/hermes-sandbox"
 chmod 600 "${HERMES_HOME}/.ssh/hermes-sandbox"
 # TERMINAL_SSH_KEY is the env var Hermes reads for the SSH private key path.
 export TERMINAL_SSH_KEY="${HERMES_HOME}/.ssh/hermes-sandbox"
