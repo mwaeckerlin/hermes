@@ -167,4 +167,4 @@ fi
 # `su` or `runuser` here — both spawn a login shell that resets the environment,
 # causing API keys and other settings to be silently lost.
 echo "Dropping root privileges"
-exec gosu hermes hermes "$@"
+exec gosu hermes /opt/hermes/.venv/bin/hermes "$@"
