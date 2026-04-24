@@ -162,9 +162,19 @@ if [ "$(stat -c '%u' "${HERMES_HOME}")" != "10000" ]; then
   chown -R hermes:hermes "${HERMES_HOME}"
 fi
 
-# Drop root privileges using gosu, which exec()s the target process directly
-# and therefore preserves all environment variables set above.  Do NOT use
-# `su` or `runuser` here — both spawn a login shell that resets the environment,
-# causing API keys and other settings to be silently lost.
+# Drop root privileges using Python's os.setuid/os.setgid + os.execv.
+# This is the most reliable way to switch users while preserving the full
+# environment block: os.execv() replaces the process image directly (no shell,
+# no PAM, no login session) so every variable exported above is inherited.
+# gosu/su are NOT used here because both can silently clear env vars after a
+# setuid() call in certain Docker/kernel configurations.
 echo "Dropping root privileges"
-exec gosu hermes /opt/hermes/.venv/bin/hermes "$@"
+exec /opt/hermes/.venv/bin/python3 -c "
+import os, sys, pwd, grp
+p = pwd.getpwnam('hermes')
+groups = list({g.gr_gid for g in grp.getgrall() if p.pw_name in g.gr_mem} | {p.pw_gid})
+os.setgroups(groups)
+os.setgid(p.pw_gid)
+os.setuid(p.pw_uid)
+os.execv(sys.argv[1], sys.argv[1:])
+" /opt/hermes/.venv/bin/hermes "$@"
