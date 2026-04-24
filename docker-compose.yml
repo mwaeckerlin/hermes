@@ -103,6 +103,9 @@ services:
       HERMES_STREAMING_ENABLED: ${HERMES_STREAMING_ENABLED:-}
       HERMES_SKILLS_NUDGE_INTERVAL: ${HERMES_SKILLS_NUDGE_INTERVAL:-}
       HERMES_STT_ENABLED: ${HERMES_STT_ENABLED:-}
+      # SECURITY: local code execution runs in the gateway (not the sandbox), with
+      # access to all API keys.  Disabled by default — set to 'true' to opt in.
+      HERMES_CODE_EXECUTION_ENABLED: ${HERMES_CODE_EXECUTION_ENABLED:-false}
       HERMES_DISPLAY_TOOL_PROGRESS: ${HERMES_DISPLAY_TOOL_PROGRESS:-}
       HERMES_DISPLAY_COMPACT: ${HERMES_DISPLAY_COMPACT:-}
       HERMES_DISPLAY_SKIN: ${HERMES_DISPLAY_SKIN:-}
@@ -123,6 +126,8 @@ services:
     init: true
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
     restart: unless-stopped
     networks:
       - gateway-sandbox
