@@ -212,10 +212,15 @@ stt:
 # =============================================================================
 # Code Execution Sandbox
 # =============================================================================
+# SECURITY: local code execution runs inside the gateway container (not the SSH
+# sandbox), so it has access to LLM API keys, the SSH private key, and the full
+# gateway filesystem.  It is therefore disabled by default.  Set
+# HERMES_CODE_EXECUTION_ENABLED=true only if you explicitly accept this risk.
 {% if HERMES_CODE_EXECUTION_YAML | default('') %}
 code_execution: {{ HERMES_CODE_EXECUTION_YAML }}
 {% else %}
 code_execution:
+  enabled: {{ HERMES_CODE_EXECUTION_ENABLED | default('false') }}
   timeout: {{ HERMES_CODE_EXECUTION_TIMEOUT | default('300') | int }}
   max_tool_calls: {{ HERMES_CODE_EXECUTION_MAX_TOOL_CALLS | default('50') | int }}
 {% endif %}
