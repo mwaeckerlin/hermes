@@ -155,4 +155,16 @@ echo "==== Starting Hermes Gateway ===="
 # access to all API keys and secrets.  Force-disable it unconditionally so
 # that no caller-supplied environment variable can ever enable it.
 export HERMES_CODE_EXECUTION_ENABLED=false
-exec /opt/hermes/docker/entrypoint.sh "$@"
+
+# Fix ownership of the data directory (Hermes runs as uid 10000 / hermes).
+if [ "$(stat -c '%u' "${HERMES_HOME}")" != "10000" ]; then
+  echo "${HERMES_HOME} is not owned by 10000, fixing"
+  chown -R hermes:hermes "${HERMES_HOME}"
+fi
+
+# Drop root privileges using gosu, which exec()s the target process directly
+# and therefore preserves all environment variables set above.  Do NOT use
+# `su` or `runuser` here — both spawn a login shell that resets the environment,
+# causing API keys and other settings to be silently lost.
+echo "Dropping root privileges"
+exec gosu hermes hermes "$@"

@@ -1,6 +1,6 @@
 FROM nousresearch/hermes-agent:latest
 USER root
-RUN apt-get update && apt-get install -y --no-install-recommends openssh-client && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends gosu openssh-client && rm -rf /var/lib/apt/lists/*
 COPY --chown=hermes:hermes files/SKILL.md /opt/hermes/skills/ssh-sandbox/SKILL.md
 COPY files/config.yaml.j2 /config.yaml.j2.default
 COPY files/render-config.py /render-config.py
