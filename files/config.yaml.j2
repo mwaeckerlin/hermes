@@ -210,6 +210,23 @@ stt:
 {% endif %}
 
 # =============================================================================
+# Text-to-Speech
+# =============================================================================
+{% if HERMES_TTS_YAML | default('') %}
+tts: {{ HERMES_TTS_YAML }}
+{% else %}
+tts:
+  enabled: {{ HERMES_TTS_ENABLED | default('true') }}
+{% if ELEVENLABS_API_KEY | default('') %}
+  provider: "elevenlabs"
+{% else %}
+  provider: "{{ HERMES_TTS_PROVIDER | default('microsoft') }}"
+{% endif %}
+  model_overrides:
+    enabled: {{ HERMES_TTS_MODEL_OVERRIDES_ENABLED | default('true') }}
+{% endif %}
+
+# =============================================================================
 # Code Execution Sandbox
 # =============================================================================
 # SECURITY: local code execution runs inside the gateway container (not the SSH
