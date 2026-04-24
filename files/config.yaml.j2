@@ -84,7 +84,10 @@ auxiliary:
 {% elif OPENAI_API_KEY | default('') %}
 auxiliary:
   compression:
-    provider: "openai"
+    # "openai" is not a named Hermes provider.  Use the custom-endpoint path
+    # instead: Hermes auto-applies OPENAI_API_KEY for any base_url pointing at
+    # api.openai.com, so no explicit provider or api_key field is needed.
+    base_url: "https://api.openai.com/v1"
     model: "gpt-4o-mini"
 {% elif LITELLM_BASE_URL | default('') %}
 auxiliary:
