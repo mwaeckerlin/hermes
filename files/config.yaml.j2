@@ -158,7 +158,9 @@ agent: {{ HERMES_AGENT_YAML }}
 agent:
   max_turns: {{ HERMES_MAX_TURNS | default('60') | int }}
   verbose: {{ HERMES_AGENT_VERBOSE | default('false') }}
-  reasoning_effort: "{{ HERMES_REASONING_EFFORT | default('medium') }}"
+{% if HERMES_REASONING_EFFORT | default('') %}
+  reasoning_effort: "{{ HERMES_REASONING_EFFORT }}"
+{% endif %}
 {% if HERMES_GATEWAY_TIMEOUT | default('') %}
   gateway_timeout: {{ HERMES_GATEWAY_TIMEOUT | int }}
 {% endif %}
