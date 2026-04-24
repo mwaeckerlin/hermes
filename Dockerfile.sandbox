@@ -5,9 +5,9 @@ ARG CONFIGURATION_COMMANDS=" \
   -e 's/^#*KbdInteractiveAuthentication.*/KbdInteractiveAuthentication no/' \
   -e 's/^#*UsePAM.*/UsePAM yes/' \
   -e 's/^#*PermitRootLogin.*/PermitRootLogin no/' \
-  -e 's/^#*PubkeyAuthentication.*/PubkeyAuthentication yes/' \
   /etc/ssh/sshd_config \
-  && grep -q '^PubkeyAuthentication' /etc/ssh/sshd_config || echo 'PubkeyAuthentication yes' >> /etc/ssh/sshd_config \
+  && sed -i '/[Pp]ubkey[Aa]uthentication/d' /etc/ssh/sshd_config \
+  && echo 'PubkeyAuthentication yes' >> /etc/ssh/sshd_config \
   && mkdir -p /run/sshd \
   && adduser \${RUN_USER} docker \
   && install -m 700 -o \${RUN_USER} -g \${RUN_GROUP} /dev/null /etc/environment \
@@ -81,7 +81,7 @@ ADD files/SKILL.md /opt/hermes/skills/ssh-sandbox/SKILL.md
 ADD files/sandbox-entrypoint.sh /entrypoint.sh
 EXPOSE 22
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=60 \
-  CMD pgrep -x sshd >/dev/null || exit 1
+  CMD nc -z localhost 22 || exit 1
 ENTRYPOINT ["/entrypoint.sh"]
 
 FROM build
