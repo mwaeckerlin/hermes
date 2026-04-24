@@ -181,5 +181,11 @@ os.setuid(p.pw_uid)
 os.environ['HOME'] = p.pw_dir
 os.environ['USER'] = p.pw_name
 os.environ['LOGNAME'] = p.pw_name
+# Remove empty-string env vars so os.getenv(key, default) returns the default
+# instead of an empty string.  docker-compose passes unset variables as '' via
+# \${VAR:-} expansion; Python's os.getenv() treats '' as a valid set value and
+# would return '' rather than the fallback, causing int('') errors in Hermes.
+for _k in [k for k, v in list(os.environ.items()) if v == '']:
+    del os.environ[_k]
 os.execv(sys.argv[1], sys.argv[1:])
 " /opt/hermes/.venv/bin/hermes "$@"
