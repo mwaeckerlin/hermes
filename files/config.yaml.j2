@@ -17,7 +17,7 @@ model: {{ HERMES_MODEL_YAML }}
 {% else %}
 model:
   # Set HERMES_DEFAULT_MODEL env var to override; entrypoint auto-selects from available API keys.
-  default: "{{ HERMES_DEFAULT_MODEL | default('anthropic/claude-opus-4.6') }}"
+  default: "{{ HERMES_DEFAULT_MODEL | default('anthropic/claude-opus-4-5') }}"
   provider: "{{ HERMES_MODEL_PROVIDER | default('auto') }}"
 {% if HERMES_MODEL_BASE_URL | default('') %}
   base_url: "{{ HERMES_MODEL_BASE_URL }}"
