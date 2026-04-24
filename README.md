@@ -205,12 +205,33 @@ All optional — configure one or more. If none is set the gateway exits with an
 |---|---|
 | `OPENROUTER_API_KEY` | OpenRouter — access to 300+ models via one key |
 | `ANTHROPIC_API_KEY` | Direct Anthropic (Claude) |
-| `OPENAI_API_KEY` | Direct OpenAI (GPT-4o, …). Also used for Whisper/TTS if `VOICE_TOOLS_OPENAI_KEY` is unset |
+| `OPENAI_API_KEY` | Direct OpenAI. Auto-selects **o4-mini** (a reasoning model). See note below. Also used for Whisper/TTS if `VOICE_TOOLS_OPENAI_KEY` is unset |
 | `GOOGLE_API_KEY` / `GEMINI_API_KEY` | Google Gemini |
 | `LITELLM_BASE_URL` | LiteLLM proxy URL (OpenAI-compatible, e.g. `http://litellm:4000`) |
 | `LITELLM_API_KEY` | API key for the LiteLLM proxy (optional) |
 | `LITELLM_DEFAULT_MODEL` | Default model served by LiteLLM (default: `gpt-4o`) |
 | `HERMES_DEFAULT_MODEL` | Override auto-selected default (e.g. `anthropic/claude-opus-4.6`) |
+
+> **OpenAI — organization verification required for reasoning models**
+>
+> When `OPENAI_API_KEY` is set, Hermes auto-selects **o4-mini** as the default
+> model because the Responses API transport always enables reasoning
+> (`reasoning.encrypted_content`), which non-o-series models (e.g. `gpt-4o`)
+> reject with HTTP 400.
+>
+> o4-mini is an OpenAI reasoning model and requires your OpenAI **organization
+> to be verified** before it can generate reasoning summaries. Without
+> verification you will see:
+>
+> ```
+> HTTP 400: Your organization must be verified to generate reasoning summaries.
+> ```
+>
+> **Fix:** go to <https://platform.openai.com/settings/organization/general>
+> and click **Verify Organization**. Access propagates within ~15 minutes.
+>
+> If you cannot or do not want to verify, use a different provider (OpenRouter,
+> Anthropic, or Google Gemini) instead of a bare `OPENAI_API_KEY`.
 
 ### Messaging Channels
 
