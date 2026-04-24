@@ -305,6 +305,7 @@ shows all approved users with **Revoke** buttons. No CLI required.
 | `EXA_API_KEY` | Exa web search |
 | `FIRECRAWL_API_KEY` | Firecrawl web scrape / crawl |
 | `PARALLEL_API_KEY` | Parallel web extract |
+| `TAVILY_API_KEY` | Tavily web search / extract |
 | `FAL_KEY` | fal.ai image generation |
 | `BROWSERBASE_API_KEY` | Browserbase cloud browser automation |
 | `BROWSERBASE_PROJECT_ID` | Browserbase project ID |
@@ -338,9 +339,9 @@ customization of the TTS section.
 
 ### Vision Configuration
 
-Hermes uses a dedicated vision model to understand images sent in chat. The
-provider and model are **auto-selected** based on whichever LLM API key is
-active, using the same priority order as the main model:
+Hermes uses a dedicated vision model to understand images sent in chat. Vision is
+configured under `auxiliary.vision` (not a top-level key). The provider and model
+are **auto-selected** based on whichever LLM API key is active:
 
 | Active key | Default vision provider & model |
 |---|---|
@@ -352,9 +353,80 @@ active, using the same priority order as the main model:
 
 | Variable | Description |
 |---|---|
-| `HERMES_VISION_PROVIDER` | Override the auto-selected vision provider |
-| `HERMES_VISION_MODEL` | Override the auto-selected vision model |
-| `HERMES_VISION_YAML` | Override the entire `vision:` section with a JSON/YAML string |
+| `HERMES_VISION_PROVIDER` | Override the auto-selected vision provider (`auxiliary.vision.provider`) |
+| `HERMES_VISION_MODEL` | Override the auto-selected vision model (`auxiliary.vision.model`) |
+| `HERMES_AUXILIARY_YAML` | Override the entire `auxiliary:` section (compression + vision + web_extract) |
+
+### Web Search Backend
+
+Web tools auto-select a backend based on available API keys (priority: Firecrawl → Parallel → Tavily → Exa).
+
+| Variable | Description |
+|---|---|
+| `HERMES_WEB_BACKEND` | Force a specific backend: `firecrawl` \| `parallel` \| `tavily` \| `exa` |
+| `HERMES_WEB_YAML` | Override the entire `web:` section with a JSON/YAML string |
+| `FIRECRAWL_API_KEY` | Firecrawl API key (search + scrape + crawl) |
+| `PARALLEL_API_KEY` | Parallel API key (search + extract) |
+| `TAVILY_API_KEY` | Tavily API key (search + extract + crawl) |
+| `EXA_API_KEY` | Exa API key (search + extract) |
+
+### Browser Automation
+
+| Variable | Description |
+|---|---|
+| `HERMES_BROWSER_INACTIVITY_TIMEOUT` | Seconds before an idle browser session is auto-closed (default: `120`) |
+| `HERMES_BROWSER_COMMAND_TIMEOUT` | Timeout in seconds for browser commands (default: Hermes built-in) |
+| `HERMES_BROWSER_CDP_URL` | Attach to an existing Chrome via CDP URL instead of launching a headless browser |
+| `HERMES_BROWSER_YAML` | Override the entire `browser:` section with a JSON/YAML string |
+
+### Privacy — PII Redaction
+
+When `HERMES_PRIVACY_REDACT_PII=true`, the gateway hashes phone numbers, user IDs and
+chat IDs in the system prompt before sending context to the LLM.
+
+| Variable | Description |
+|---|---|
+| `HERMES_PRIVACY_REDACT_PII` | `true` to enable PII redaction (default: `false`) |
+| `HERMES_PRIVACY_YAML` | Override the entire `privacy:` section with a JSON/YAML string |
+
+### Human Delay
+
+Simulate human-like response pacing in messaging platforms.
+
+| Variable | Description |
+|---|---|
+| `HERMES_HUMAN_DELAY_MODE` | `off` (default) \| `natural` \| `custom` |
+| `HERMES_HUMAN_DELAY_MIN_MS` | Minimum delay in ms (custom mode, default: `800`) |
+| `HERMES_HUMAN_DELAY_MAX_MS` | Maximum delay in ms (custom mode, default: `2500`) |
+| `HERMES_HUMAN_DELAY_YAML` | Override the entire `human_delay:` section |
+
+### Prompt Caching
+
+Controls the Anthropic prompt cache TTL. Only affects Claude models via the Anthropic
+API or OpenRouter.
+
+| Variable | Description |
+|---|---|
+| `HERMES_PROMPT_CACHING_TTL` | Cache TTL: `5m` (default) or `1h` for long sessions with pauses |
+| `HERMES_PROMPT_CACHING_YAML` | Override the entire `prompt_caching:` section |
+
+### OpenRouter Provider Routing
+
+Controls how requests are routed across providers on OpenRouter.
+Only active when `OPENROUTER_API_KEY` is set.
+
+| Variable | Description |
+|---|---|
+| `HERMES_PROVIDER_ROUTING_SORT` | Sort strategy: `price` (default) \| `throughput` \| `latency` |
+| `HERMES_PROVIDER_ROUTING_YAML` | Full `provider_routing:` override (supports `sort`, `only`, `ignore`, `order`, etc.) |
+
+### Miscellaneous Settings
+
+| Variable | config.yaml key | Description |
+|---|---|---|
+| `HERMES_UNAUTHORIZED_DM_BEHAVIOR` | `unauthorized_dm_behavior` | `pair` (default — send pairing code) \| `ignore` |
+| `HERMES_TIMEZONE` | `timezone` | IANA timezone string (e.g. `Europe/Berlin`). Default: server-local time |
+| `HERMES_FILE_READ_MAX_CHARS` | `file_read_max_chars` | Max chars per `read_file` call. Hermes default: 100 000 |
 
 ### config.yaml — Section-Level Overrides
 
@@ -376,7 +448,16 @@ completely replaced by setting `HERMES_<SECTION>_YAML` to a JSON string
 | `HERMES_PLATFORM_TOOLSETS_YAML` | `platform_toolsets:` |
 | `HERMES_STT_YAML` | `stt:` |
 | `HERMES_TTS_YAML` | `tts:` |
-| `HERMES_VISION_YAML` | `vision:` |
+| `HERMES_AUXILIARY_YAML` | `auxiliary:` (compression + vision + web_extract) |
+| `HERMES_TOOL_OUTPUT_YAML` | `tool_output:` |
+| `HERMES_WEB_YAML` | `web:` |
+| `HERMES_BROWSER_YAML` | `browser:` |
+| `HERMES_PRIVACY_YAML` | `privacy:` |
+| `HERMES_VOICE_YAML` | `voice:` |
+| `HERMES_HUMAN_DELAY_YAML` | `human_delay:` |
+| `HERMES_PROMPT_CACHING_YAML` | `prompt_caching:` |
+| `HERMES_PROVIDER_ROUTING_YAML` | `provider_routing:` |
+| `HERMES_VISION_YAML` | `auxiliary:` (shortcut — same as `HERMES_AUXILIARY_YAML`) |
 | `HERMES_CODE_EXECUTION_YAML` | `code_execution:` |
 | `HERMES_DELEGATION_YAML` | `delegation:` |
 | `HERMES_MCP_SERVERS_YAML` | `mcp_servers:` |
@@ -420,8 +501,28 @@ HERMES_PLATFORM_TOOLSETS_YAML='{"telegram":["web","terminal","file","skills","to
 | `HERMES_TTS_ENABLED` | `tts.enabled` | `true` |
 | `HERMES_TTS_PROVIDER` | `tts.provider` | `microsoft` (or `elevenlabs` if key set) |
 | `HERMES_TTS_MODEL_OVERRIDES_ENABLED` | `tts.model_overrides.enabled` | `true` |
-| `HERMES_VISION_PROVIDER` | `vision.provider` | auto-selected from active LLM provider |
-| `HERMES_VISION_MODEL` | `vision.model` | auto-selected per provider (see Vision section) |
+| `HERMES_VISION_PROVIDER` | `auxiliary.vision.provider` | auto-selected from active LLM provider |
+| `HERMES_VISION_MODEL` | `auxiliary.vision.model` | auto-selected per provider (see Vision section) |
+| `HERMES_WEB_EXTRACT_PROVIDER` | `auxiliary.web_extract.provider` | `auto` |
+| `HERMES_WEB_EXTRACT_MODEL` | `auxiliary.web_extract.model` | — |
+| `HERMES_FILE_READ_MAX_CHARS` | `file_read_max_chars` | — (Hermes default: 100 000) |
+| `HERMES_TOOL_OUTPUT_MAX_BYTES` | `tool_output.max_bytes` | — (Hermes default: 50 000) |
+| `HERMES_TOOL_OUTPUT_MAX_LINES` | `tool_output.max_lines` | — (Hermes default: 2000) |
+| `HERMES_TOOL_OUTPUT_MAX_LINE_LENGTH` | `tool_output.max_line_length` | — (Hermes default: 2000) |
+| `HERMES_WEB_BACKEND` | `web.backend` | auto-detected from API keys |
+| `HERMES_BROWSER_INACTIVITY_TIMEOUT` | `browser.inactivity_timeout` | `120` |
+| `HERMES_BROWSER_COMMAND_TIMEOUT` | `browser.command_timeout` | — |
+| `HERMES_BROWSER_CDP_URL` | `browser.cdp_url` | — |
+| `HERMES_PRIVACY_REDACT_PII` | `privacy.redact_pii` | `false` |
+| `HERMES_VOICE_AUTO_TTS` | `voice.auto_tts` | `false` |
+| `HERMES_VOICE_MAX_RECORDING_SECONDS` | `voice.max_recording_seconds` | `120` |
+| `HERMES_HUMAN_DELAY_MODE` | `human_delay.mode` | — (`off`) |
+| `HERMES_HUMAN_DELAY_MIN_MS` | `human_delay.min_ms` | `800` |
+| `HERMES_HUMAN_DELAY_MAX_MS` | `human_delay.max_ms` | `2500` |
+| `HERMES_PROMPT_CACHING_TTL` | `prompt_caching.cache_ttl` | — (`5m`) |
+| `HERMES_PROVIDER_ROUTING_SORT` | `provider_routing.sort` | — (`price`) |
+| `HERMES_UNAUTHORIZED_DM_BEHAVIOR` | `unauthorized_dm_behavior` | — (`pair`) |
+| `HERMES_TIMEZONE` | `timezone` | — (server-local) |
 | `HERMES_DISPLAY_TOOL_PROGRESS` | `display.tool_progress` | `all` |
 | `HERMES_DISPLAY_COMPACT` | `display.compact` | `false` |
 | `HERMES_DISPLAY_SKIN` | `display.skin` | `default` |
