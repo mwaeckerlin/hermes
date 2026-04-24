@@ -70,7 +70,11 @@ if [ -z "$HERMES_DEFAULT_MODEL" ]; then
     # never reach OPENAI_API_KEY.  Use provider=custom with the OpenAI base URL
     # so requests go directly to api.openai.com (OPENAI_API_KEY is picked up
     # automatically by the custom endpoint auth chain).
-    export HERMES_DEFAULT_MODEL="gpt-4o"
+    # Use o4-mini (not gpt-4o): Hermes always enables reasoning on the Responses
+    # API transport with include=["reasoning.encrypted_content"], which gpt-4o
+    # rejects (HTTP 400).  o4-mini fully supports the Responses API + encrypted
+    # reasoning and is cost-effective for general assistant use.
+    export HERMES_DEFAULT_MODEL="o4-mini"
     export HERMES_MODEL_PROVIDER="${HERMES_MODEL_PROVIDER:-custom}"
     export HERMES_MODEL_BASE_URL="${HERMES_MODEL_BASE_URL:-https://api.openai.com/v1}"
   elif [ -n "$LITELLM_BASE_URL" ]; then

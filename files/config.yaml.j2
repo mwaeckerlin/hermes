@@ -39,8 +39,10 @@ terminal:
   ssh_host: "{{ HERMES_TERMINAL_SSH_HOST | default('hermes-sandbox') }}"
   ssh_user: "{{ HERMES_TERMINAL_SSH_USER | default('somebody') }}"
   ssh_port: {{ HERMES_TERMINAL_SSH_PORT | default('22') | int }}
-  # SSH key is written to $HERMES_HOME/.ssh/hermes-sandbox by entrypoint.sh
-  ssh_key: "~/.ssh/hermes-sandbox"
+  # SSH key is written to $HERMES_HOME/.ssh/hermes-sandbox by entrypoint.sh;
+  # use the absolute path from TERMINAL_SSH_KEY (set before rendering) so that
+  # tilde-expansion to the hermes user's home directory does not break lookups.
+  ssh_key: "{{ TERMINAL_SSH_KEY }}"
   cwd: "~"
   timeout: {{ HERMES_TERMINAL_TIMEOUT | default('180') | int }}
   lifetime_seconds: {{ HERMES_TERMINAL_LIFETIME | default('300') | int }}
@@ -87,8 +89,11 @@ auxiliary:
     # "openai" is not a named Hermes provider.  Use the custom-endpoint path
     # instead: Hermes auto-applies OPENAI_API_KEY for any base_url pointing at
     # api.openai.com, so no explicit provider or api_key field is needed.
+    # Use o4-mini (not gpt-4o-mini): Hermes routes auxiliary calls through the
+    # Responses API transport which always includes reasoning.encrypted_content;
+    # non-o-series models reject that with HTTP 400.
     base_url: "https://api.openai.com/v1"
-    model: "gpt-4o-mini"
+    model: "o4-mini"
 {% elif LITELLM_BASE_URL | default('') %}
 auxiliary:
   compression:
