@@ -60,9 +60,11 @@ fi
 # order below only determines which model is used by default.
 if [ -z "$HERMES_DEFAULT_MODEL" ]; then
   if [ -n "$OPENROUTER_API_KEY" ]; then
-    # OpenRouter uses hyphenated model IDs (e.g. claude-opus-4-5) rather than
-    # the dot notation used by the Anthropic API (e.g. claude-opus-4.6).
-    export HERMES_DEFAULT_MODEL="openrouter/anthropic/claude-opus-4-5"
+    # Model ID for OpenRouter: use the bare OpenRouter slug (e.g. anthropic/claude-opus-4-5)
+    # WITHOUT any "openrouter/" routing prefix.  Hermes passes the model string
+    # directly to https://openrouter.ai/api/v1, so the prefix must not appear in
+    # the actual HTTP request body — OpenRouter rejects "openrouter/..." IDs.
+    export HERMES_DEFAULT_MODEL="anthropic/claude-opus-4-5"
   elif [ -n "$ANTHROPIC_API_KEY" ]; then
     export HERMES_DEFAULT_MODEL="anthropic/claude-opus-4.6"
   elif [ -n "$GOOGLE_API_KEY" ] || [ -n "$GEMINI_API_KEY" ]; then

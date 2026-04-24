@@ -203,7 +203,7 @@ All optional — configure one or more. If none is set the gateway exits with an
 
 | Variable | Description |
 |---|---|
-| `OPENROUTER_API_KEY` | OpenRouter — access to 300+ models via one key. Auto-selects **claude-opus-4-5**. See note below. |
+| `OPENROUTER_API_KEY` | OpenRouter — access to 300+ models via one key. Auto-selects **`anthropic/claude-opus-4-5`**. See note below. |
 | `ANTHROPIC_API_KEY` | Direct Anthropic (Claude) |
 | `OPENAI_API_KEY` | Direct OpenAI. Auto-selects **o4-mini** (a reasoning model). See note below. Also used for Whisper/TTS if `VOICE_TOOLS_OPENAI_KEY` is unset |
 | `GOOGLE_API_KEY` / `GEMINI_API_KEY` | Google Gemini |
@@ -214,20 +214,20 @@ All optional — configure one or more. If none is set the gateway exits with an
 
 > **OpenRouter — model ID naming**
 >
-> OpenRouter uses **hyphenated** version suffixes in model IDs, which differ from
-> the dot notation used by the Anthropic API. For example, the Anthropic API model
-> `claude-opus-4.6` is listed on OpenRouter as `anthropic/claude-opus-4-5`
-> (or the closest available version). Using the dot notation with OpenRouter will
-> fail with:
+> Hermes routes OpenRouter requests by calling `https://openrouter.ai/api/v1`
+> directly. The `model` field in the request must be the **bare OpenRouter model
+> slug** — do **not** include an `openrouter/` prefix. OpenRouter rejects IDs
+> that include the routing prefix:
 >
 > ```
-> HTTP 400: openrouter/anthropic/claude-opus-4.6 is not a valid model ID
+> HTTP 400: openrouter/anthropic/claude-opus-4-5 is not a valid model ID
 > ```
 >
-> The gateway auto-selects `openrouter/anthropic/claude-opus-4-5` when
+> The gateway auto-selects `anthropic/claude-opus-4-5` when
 > `OPENROUTER_API_KEY` is set. To use a different model, override with
-> `HERMES_DEFAULT_MODEL=openrouter/<openrouter-model-id>`. Check
-> <https://openrouter.ai/models> for available model IDs.
+> `HERMES_DEFAULT_MODEL=<openrouter-model-slug>` (e.g.
+> `anthropic/claude-3-opus`). Check <https://openrouter.ai/models> for the
+> exact model slugs.
 
 > **OpenAI — organization verification required for reasoning models**
 >
