@@ -227,6 +227,36 @@ tts:
 {% endif %}
 
 # =============================================================================
+# Vision (image understanding)
+# =============================================================================
+# Auto-selects a capable vision model matching the active LLM provider.
+# Override the entire section with HERMES_VISION_YAML, or individual fields
+# with HERMES_VISION_PROVIDER / HERMES_VISION_MODEL.
+{% if HERMES_VISION_YAML | default('') %}
+vision: {{ HERMES_VISION_YAML }}
+{% elif OPENROUTER_API_KEY | default('') %}
+vision:
+  provider: "{{ HERMES_VISION_PROVIDER | default('openrouter') }}"
+  model: "{{ HERMES_VISION_MODEL | default('anthropic/claude-sonnet-4') }}"
+{% elif ANTHROPIC_API_KEY | default('') %}
+vision:
+  provider: "{{ HERMES_VISION_PROVIDER | default('anthropic') }}"
+  model: "{{ HERMES_VISION_MODEL | default('claude-sonnet-4-5') }}"
+{% elif GOOGLE_API_KEY | default('') or GEMINI_API_KEY | default('') %}
+vision:
+  provider: "{{ HERMES_VISION_PROVIDER | default('gemini') }}"
+  model: "{{ HERMES_VISION_MODEL | default('gemini-2.0-flash') }}"
+{% elif OPENAI_API_KEY | default('') %}
+vision:
+  provider: "{{ HERMES_VISION_PROVIDER | default('openai') }}"
+  model: "{{ HERMES_VISION_MODEL | default('gpt-4o') }}"
+{% elif LITELLM_BASE_URL | default('') %}
+vision:
+  base_url: "{{ LITELLM_BASE_URL }}"
+  model: "{{ HERMES_VISION_MODEL | default(LITELLM_DEFAULT_MODEL | default('gpt-4o')) }}"
+{% endif %}
+
+# =============================================================================
 # Code Execution Sandbox
 # =============================================================================
 # SECURITY: local code execution runs inside the gateway container (not the SSH
