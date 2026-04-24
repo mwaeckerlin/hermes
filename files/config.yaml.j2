@@ -214,16 +214,12 @@ stt:
 # =============================================================================
 # SECURITY: local code execution runs inside the gateway container (not the SSH
 # sandbox), so it has access to LLM API keys, the SSH private key, and the full
-# gateway filesystem.  It is therefore disabled by default.  Set
-# HERMES_CODE_EXECUTION_ENABLED=true only if you explicitly accept this risk.
-{% if HERMES_CODE_EXECUTION_YAML | default('') %}
-code_execution: {{ HERMES_CODE_EXECUTION_YAML }}
-{% else %}
+# gateway filesystem.  It is therefore unconditionally disabled — this value is
+# hard-coded and cannot be overridden via environment variables.
 code_execution:
-  enabled: {{ HERMES_CODE_EXECUTION_ENABLED | default('false') }}
+  enabled: false
   timeout: {{ HERMES_CODE_EXECUTION_TIMEOUT | default('300') | int }}
   max_tool_calls: {{ HERMES_CODE_EXECUTION_MAX_TOOL_CALLS | default('50') | int }}
-{% endif %}
 
 # =============================================================================
 # Subagent Delegation
