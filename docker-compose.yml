@@ -13,9 +13,9 @@ services:
       # ── SSH key for sandbox (required) ─────────────────────────────────────
       HERMES_SANDBOX_SSH_PRIVATE_KEY: ${HERMES_SANDBOX_SSH_PRIVATE_KEY}
       # ── Config control ─────────────────────────────────────────────────────
-      # OVERWRITE_CONFIG=true: re-render and overwrite config.yaml on every start.
-      # Leave unset to preserve user edits in the hermes-data volume.
-      OVERWRITE_CONFIG: ${OVERWRITE_CONFIG:-}
+      # OVERWRITE_CONFIG=true (default): re-render and overwrite config.yaml on every start.
+      # Set OVERWRITE_CONFIG=false to preserve user edits in the hermes-data volume.
+      OVERWRITE_CONFIG: ${OVERWRITE_CONFIG:-true}
       # Override auto-selected default model (e.g. "anthropic/claude-opus-4.6")
       HERMES_DEFAULT_MODEL: ${HERMES_DEFAULT_MODEL:-}
       # ── LLM providers (all optional, set one or more) ──────────────────────
@@ -132,8 +132,8 @@ services:
       HERMES_PRIVACY_REDACT_PII: ${HERMES_PRIVACY_REDACT_PII:-}
       HERMES_VOICE_AUTO_TTS: ${HERMES_VOICE_AUTO_TTS:-}
       HERMES_VOICE_MAX_RECORDING_SECONDS: ${HERMES_VOICE_MAX_RECORDING_SECONDS:-}
-      HERMES_HUMAN_DELAY_MIN_MS: ${HERMES_HUMAN_DELAY_MIN_MS:-}
-      HERMES_HUMAN_DELAY_MAX_MS: ${HERMES_HUMAN_DELAY_MAX_MS:-}
+      HERMES_HUMAN_DELAY_MIN_MS: ${HERMES_HUMAN_DELAY_MIN_MS:-800}
+      HERMES_HUMAN_DELAY_MAX_MS: ${HERMES_HUMAN_DELAY_MAX_MS:-2500}
       HERMES_PROMPT_CACHING_TTL: ${HERMES_PROMPT_CACHING_TTL:-}
       HERMES_PROVIDER_ROUTING_SORT: ${HERMES_PROVIDER_ROUTING_SORT:-}
       HERMES_UNAUTHORIZED_DM_BEHAVIOR: ${HERMES_UNAUTHORIZED_DM_BEHAVIOR:-}
