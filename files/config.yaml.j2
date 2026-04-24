@@ -63,18 +63,29 @@ compression:
 # Auxiliary LLM (context compression / summarization / memory flush)
 # =============================================================================
 # Hermes auto-detects auxiliary via OpenRouter → Nous → Codex.  When none of
-# those keys are present we must configure the auxiliary explicitly; otherwise
-# the compressor silently drops middle turns without a summary.
-# Using provider "main" reuses the same credentials as the primary model.
+# those keys are present we must configure the auxiliary explicitly with the
+# correct provider name; otherwise the compressor silently drops middle turns.
+# Mirror the same provider-priority order used by the entrypoint for the main
+# model so the auxiliary always uses the same credentials.
 {% if HERMES_AUXILIARY_YAML | default('') %}
 auxiliary: {{ HERMES_AUXILIARY_YAML }}
-{% elif not OPENROUTER_API_KEY | default('') %}
+{% elif OPENROUTER_API_KEY | default('') %}
+{# OpenRouter is available — Hermes auto-detect handles this correctly #}
+{% elif ANTHROPIC_API_KEY | default('') %}
 auxiliary:
   compression:
-    provider: "main"
-{% if OPENAI_API_KEY | default('') %}
+    provider: "anthropic"
+    model: "claude-haiku-4-5"
+{% elif GOOGLE_API_KEY | default('') or GEMINI_API_KEY | default('') %}
+auxiliary:
+  compression:
+    provider: "gemini"
+    model: "gemini-2.0-flash"
+{% elif OPENAI_API_KEY | default('') %}
+auxiliary:
+  compression:
+    provider: "openai"
     model: "gpt-4o-mini"
-{% endif %}
 {% endif %}
 
 # =============================================================================
