@@ -141,7 +141,7 @@ services:
     volumes:
       - hermes-data:/opt/data
     ports:
-      - "${HERMES_DASHBOARD_PORT:-9119}:9119"
+      - "${HERMES_DASHBOARD_PORT}:9119"
     init: true
     security_opt:
       - no-new-privileges:true

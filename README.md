@@ -154,6 +154,7 @@ ssh-keygen -t ed25519 -f hermes-key -N "" -C "hermes-sandbox"
 cat > .env <<EOF
 HERMES_SANDBOX_SSH_PUBLIC_KEY=$(cat hermes-key.pub)
 HERMES_SANDBOX_SSH_PRIVATE_KEY=$(sed -z 's/\n/\\n/g' hermes-key)
+HERMES_DASHBOARD_PORT=9119
 OPENROUTER_API_KEY=sk-or-...[YOUR-OPENROUTER-KEY]
 EOF
 rm hermes-key hermes-key.pub
@@ -218,6 +219,7 @@ Any Docker Secret is automatically available — no explicit mapping required.
 |---|---|---|
 | `HERMES_SANDBOX_SSH_PUBLIC_KEY` | **yes** | Ed25519 public key for sandbox SSH access |
 | `HERMES_SANDBOX_SSH_PRIVATE_KEY` | **yes** | Private key (`\n`-encoded), gateway → sandbox |
+| `HERMES_DASHBOARD_PORT` | **yes** | Host port mapped to the dashboard (e.g. `9119`) |
 
 ### LLM Providers
 
