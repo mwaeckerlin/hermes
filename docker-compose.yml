@@ -138,7 +138,6 @@ services:
         condition: service_started
     environment:
       GATEWAY_HEALTH_URL: http://hermes-gateway:8642
-      GATEWAY_HEALTH_TIMEOUT: ${GATEWAY_HEALTH_TIMEOUT:-}
     volumes:
       - hermes-data:/opt/data
     ports:
