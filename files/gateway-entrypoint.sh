@@ -176,5 +176,10 @@ groups = list({g.gr_gid for g in grp.getgrall() if p.pw_name in g.gr_mem} | {p.p
 os.setgroups(groups)
 os.setgid(p.pw_gid)
 os.setuid(p.pw_uid)
+# Update HOME/USER so Hermes writes state files to the hermes user's directory,
+# not /root (which is not accessible after the privilege drop).
+os.environ['HOME'] = p.pw_dir
+os.environ['USER'] = p.pw_name
+os.environ['LOGNAME'] = p.pw_name
 os.execv(sys.argv[1], sys.argv[1:])
 " /opt/hermes/.venv/bin/hermes "$@"
