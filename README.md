@@ -288,7 +288,7 @@ Channels are enabled by setting the corresponding token. No explicit `enabled: t
 | `SLACK_ALLOWED_USERS` | Comma-separated Slack user IDs |
 | `WHATSAPP_ENABLED` | `true` to enable. Run `hermes whatsapp` to pair. |
 | `WHATSAPP_ALLOWED_USERS` | Comma-separated phone numbers |
-| `GATEWAY_ALLOW_ALL_USERS` | `true` = open access (no allowlist). Default: `false` |
+| `GATEWAY_ALLOW_ALL_USERS` | `true` (Hermes default) = anyone in your chat groups can use the bot; set to `false` and configure per-platform `*_ALLOWED_USERS` for production. |
 
 When a new user contacts the bot for the first time, they receive a random pairing
 code and are asked to pass it to the bot owner for approval. To approve (or revoke)
@@ -420,5 +420,5 @@ Docker-in-Docker is therefore not supported in Swarm mode.
 - [ ] All secrets via `docker secret`, not environment variables
 - [ ] Encrypted overlay networks (uncomment `driver_opts: encrypted: "true"` in `docker-compose.yml`)
 - [ ] Port 9119 (dashboard) behind TLS reverse proxy with authentication — or not exposed publicly (not needed when using only chat platforms)
-- [ ] `GATEWAY_ALLOW_ALL_USERS=false` (default) or explicit `TELEGRAM_ALLOWED_USERS`/`DISCORD_*` allowlists
+- [ ] `GATEWAY_ALLOW_ALL_USERS=false` with explicit `TELEGRAM_ALLOWED_USERS`/`DISCORD_*` allowlists (Hermes default is `true` — open access)
 - [ ] Firewall restricts access to the dashboard port

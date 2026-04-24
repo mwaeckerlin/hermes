@@ -47,8 +47,8 @@ services:
       SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
       SLACK_APP_TOKEN: ${SLACK_APP_TOKEN:-}
       SLACK_ALLOWED_USERS: ${SLACK_ALLOWED_USERS:-}
-      # Gateway-wide open access (false = allowlist only)
-      GATEWAY_ALLOW_ALL_USERS: ${GATEWAY_ALLOW_ALL_USERS:-true}
+      # Gateway-wide open access (unset = Hermes default applies; false = allowlist only)
+      GATEWAY_ALLOW_ALL_USERS: ${GATEWAY_ALLOW_ALL_USERS:-}
       # ── Tool API keys ────────────────────────────────────────────────────────
       # Voice transcription (Whisper) and OpenAI TTS
       # Defaults to OPENAI_API_KEY if unset (handled by entrypoint).
@@ -114,9 +114,9 @@ services:
       HERMES_TERMINAL_SSH_PORT: ${HERMES_TERMINAL_SSH_PORT:-}
       HERMES_TERMINAL_TIMEOUT: ${HERMES_TERMINAL_TIMEOUT:-}
       # ── Debug ────────────────────────────────────────────────────────────────
-      WEB_TOOLS_DEBUG: ${WEB_TOOLS_DEBUG:-false}
-      VISION_TOOLS_DEBUG: ${VISION_TOOLS_DEBUG:-false}
-      HERMES_HUMAN_DELAY_MODE: ${HERMES_HUMAN_DELAY_MODE:-off}
+      WEB_TOOLS_DEBUG: ${WEB_TOOLS_DEBUG:-}
+      VISION_TOOLS_DEBUG: ${VISION_TOOLS_DEBUG:-}
+      HERMES_HUMAN_DELAY_MODE: ${HERMES_HUMAN_DELAY_MODE:-}
     volumes:
       - hermes-data:/opt/data
     init: true
@@ -138,7 +138,7 @@ services:
         condition: service_started
     environment:
       GATEWAY_HEALTH_URL: http://hermes-gateway:8642
-      GATEWAY_HEALTH_TIMEOUT: ${GATEWAY_HEALTH_TIMEOUT:-3}
+      GATEWAY_HEALTH_TIMEOUT: ${GATEWAY_HEALTH_TIMEOUT:-}
     volumes:
       - hermes-data:/opt/data
     ports:
