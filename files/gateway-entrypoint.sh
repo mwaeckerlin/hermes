@@ -125,4 +125,8 @@ for f in gateway.pid gateway.lock; do
 done
 
 echo "==== Starting Hermes Gateway ===="
+# SECURITY: local code execution runs inside the gateway container and has
+# access to all API keys and secrets.  Force-disable it unconditionally so
+# that no caller-supplied environment variable can ever enable it.
+export HERMES_CODE_EXECUTION_ENABLED=false
 exec /opt/hermes/docker/entrypoint.sh "$@"
