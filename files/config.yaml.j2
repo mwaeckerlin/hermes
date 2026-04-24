@@ -396,10 +396,10 @@ voice:
 # Simulate human-like response pacing: off | natural | custom.
 {% if HERMES_HUMAN_DELAY_YAML | default('') %}
 human_delay: {{ HERMES_HUMAN_DELAY_YAML }}
-{% elif HERMES_HUMAN_DELAY_MODE | default('') %}
+{% else %}
 human_delay:
-  mode: "{{ HERMES_HUMAN_DELAY_MODE }}"
-{% if HERMES_HUMAN_DELAY_MODE | default('off') != 'off' %}
+  mode: "{{ HERMES_HUMAN_DELAY_MODE | default('off', true) }}"
+{% if (HERMES_HUMAN_DELAY_MODE | default('off', true)) != 'off' %}
   min_ms: {{ HERMES_HUMAN_DELAY_MIN_MS | default('800', true) | int }}
   max_ms: {{ HERMES_HUMAN_DELAY_MAX_MS | default('2500', true) | int }}
 {% endif %}
