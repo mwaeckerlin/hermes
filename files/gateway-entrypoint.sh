@@ -26,7 +26,7 @@ if [ -n "$LITELLM_BASE_URL" ]; then
     export HERMES_MODEL_BASE_URL="${HERMES_MODEL_BASE_URL:-$LITELLM_BASE_URL}"
     # LiteLLM uses the OpenAI wire protocol; supply the key via OPENAI_API_KEY.
     if [ -n "$LITELLM_API_KEY" ]; then
-      export OPENAI_API_KEY="${OPENAI_API_KEY:-$LITELLM_API_KEY}"
+      export OPENAI_API_KEY="${LITELLM_API_KEY}"
     fi
     echo "LiteLLM provider configured: $LITELLM_BASE_URL"
   fi
