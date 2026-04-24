@@ -40,6 +40,14 @@ if [ -z "$OPENROUTER_API_KEY" ] && [ -z "$ANTHROPIC_API_KEY" ] && \
   exit 1
 fi
 
+# Log which providers are active.
+echo "==== Configured LLM Providers ===="
+[ -n "$OPENROUTER_API_KEY" ]                           && echo "  - OpenRouter"
+[ -n "$ANTHROPIC_API_KEY" ]                            && echo "  - Anthropic (Claude)"
+[ -n "$OPENAI_API_KEY" ]                               && echo "  - OpenAI"
+{ [ -n "$GOOGLE_API_KEY" ] || [ -n "$GEMINI_API_KEY" ]; } && echo "  - Google Gemini"
+[ -n "$LITELLM_BASE_URL" ]                             && echo "  - LiteLLM ($LITELLM_BASE_URL)"
+
 # Whisper/TTS: VOICE_TOOLS_OPENAI_KEY is Hermes's real env var for voice features.
 # Fall back to OPENAI_API_KEY if not set separately.
 if [ -z "$VOICE_TOOLS_OPENAI_KEY" ] && [ -n "$OPENAI_API_KEY" ]; then
