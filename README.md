@@ -336,6 +336,26 @@ the text. German text gets a German voice, French text gets a French voice, etc.
 Override with `HERMES_TTS_PROVIDER` or use `HERMES_TTS_YAML` for full
 customization of the TTS section.
 
+### Vision Configuration
+
+Hermes uses a dedicated vision model to understand images sent in chat. The
+provider and model are **auto-selected** based on whichever LLM API key is
+active, using the same priority order as the main model:
+
+| Active key | Default vision provider & model |
+|---|---|
+| `OPENROUTER_API_KEY` | `openrouter` / `anthropic/claude-sonnet-4` |
+| `ANTHROPIC_API_KEY` | `anthropic` / `claude-sonnet-4-5` |
+| `GOOGLE_API_KEY` / `GEMINI_API_KEY` | `gemini` / `gemini-2.0-flash` |
+| `OPENAI_API_KEY` | `openai` / `gpt-4o` |
+| `LITELLM_BASE_URL` | LiteLLM proxy / `LITELLM_DEFAULT_MODEL` (or `gpt-4o`) |
+
+| Variable | Description |
+|---|---|
+| `HERMES_VISION_PROVIDER` | Override the auto-selected vision provider |
+| `HERMES_VISION_MODEL` | Override the auto-selected vision model |
+| `HERMES_VISION_YAML` | Override the entire `vision:` section with a JSON/YAML string |
+
 ### config.yaml — Section-Level Overrides
 
 The gateway renders `files/config.yaml.j2` (Jinja2 template) into
@@ -356,6 +376,7 @@ completely replaced by setting `HERMES_<SECTION>_YAML` to a JSON string
 | `HERMES_PLATFORM_TOOLSETS_YAML` | `platform_toolsets:` |
 | `HERMES_STT_YAML` | `stt:` |
 | `HERMES_TTS_YAML` | `tts:` |
+| `HERMES_VISION_YAML` | `vision:` |
 | `HERMES_CODE_EXECUTION_YAML` | `code_execution:` |
 | `HERMES_DELEGATION_YAML` | `delegation:` |
 | `HERMES_MCP_SERVERS_YAML` | `mcp_servers:` |
@@ -399,6 +420,8 @@ HERMES_PLATFORM_TOOLSETS_YAML='{"telegram":["web","terminal","file","skills","to
 | `HERMES_TTS_ENABLED` | `tts.enabled` | `true` |
 | `HERMES_TTS_PROVIDER` | `tts.provider` | `microsoft` (or `elevenlabs` if key set) |
 | `HERMES_TTS_MODEL_OVERRIDES_ENABLED` | `tts.model_overrides.enabled` | `true` |
+| `HERMES_VISION_PROVIDER` | `vision.provider` | auto-selected from active LLM provider |
+| `HERMES_VISION_MODEL` | `vision.model` | auto-selected per provider (see Vision section) |
 | `HERMES_DISPLAY_TOOL_PROGRESS` | `display.tool_progress` | `all` |
 | `HERMES_DISPLAY_COMPACT` | `display.compact` | `false` |
 | `HERMES_DISPLAY_SKIN` | `display.skin` | `default` |
