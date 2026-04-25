@@ -26,7 +26,6 @@ class AddTodoRequest(BaseModel):
 
 class UpdateTodoRequest(BaseModel):
     title: str | None = None
-    status: str | None = None
     notes: str | None = None
     progress_note: str | None = None
 
@@ -54,12 +53,11 @@ async def add_todo(req: AddTodoRequest):
 
 @router.post("/update/{item_id}")
 async def update_todo(item_id: str, req: UpdateTodoRequest):
-    """Update title, notes, status, or append a progress note."""
+    """Update title, notes, or append a progress note without changing status."""
     try:
         item = _store.update(
             item_id,
             title=req.title,
-            status=req.status,
             notes=req.notes,
             progress_note=req.progress_note,
         )
@@ -72,32 +70,65 @@ async def update_todo(item_id: str, req: UpdateTodoRequest):
 
 @router.post("/claim-next")
 async def claim_next_todo():
-    """Move the first open TODO item to in_progress."""
+    """Agent/API transition: move the first open TODO item to in_progress."""
     item = _store.claim_next()
     return {"ok": item is not None, "item": item}
 
 
-@router.post("/cancel/{item_id}")
-async def cancel_todo(item_id: str, req: UpdateTodoRequest):
-    """Cancel a TODO with an optional human comment."""
+@router.post("/done/{item_id}")
+async def done_todo(item_id: str, req: UpdateTodoRequest):
+    """Agent/API transition: move an in-progress TODO item to done."""
     try:
-        item = _store.update(item_id, status="cancelled", progress_note=req.progress_note)
+        item = _store.agent_done(item_id, progress_note=req.progress_note)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "item": item}
+
+
+@router.post("/cancel/{item_id}")
+async def cancel_todo(item_id: str, req: UpdateTodoRequest):
+    """User transition: cancel a TODO with an optional comment."""
+    try:
+        item = _store.user_cancel(item_id, progress_note=req.progress_note)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"ok": True, "item": item}
 
 
 @router.post("/reject/{item_id}")
 async def reject_todo(item_id: str, req: UpdateTodoRequest):
-    """Reject a done TODO and move it back to open with a human comment."""
+    """User transition: reject a done TODO and move it back to open."""
     try:
-        item = _store.update(item_id, status="open", progress_note=req.progress_note)
+        item = _store.user_reject(item_id, progress_note=req.progress_note)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "item": item}
+
+
+@router.post("/accept/{item_id}")
+async def accept_todo(item_id: str, req: UpdateTodoRequest):
+    """User transition: accept a done TODO."""
+    try:
+        item = _store.user_accept(item_id, progress_note=req.progress_note)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"ok": True, "item": item}
 
 
 @router.post("/delete")
 async def delete_todo(req: DeleteTodoRequest):
-    """Delete a TODO item."""
-    return {"ok": _store.delete(req.id)}
+    """Delete an accepted or cancelled TODO item."""
+    try:
+        return {"ok": _store.delete(req.id)}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

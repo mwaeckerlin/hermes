@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-VALID_STATUSES = ("open", "in_progress", "done", "cancelled")
+VALID_STATUSES = ("open", "in_progress", "done", "accepted", "cancelled")
 DEFAULT_STATUS = "open"
 
 
@@ -75,6 +75,8 @@ class TodoStore:
         notes: Optional[str] = None,
         progress_note: Optional[str] = None,
     ) -> Dict[str, Any]:
+        if status is not None:
+            raise ValueError("Use role-specific transition methods to change status")
         data = self._read()
         item = self._find(data, item_id)
         if title is not None:
@@ -82,22 +84,18 @@ class TodoStore:
             if not clean_title:
                 raise ValueError("Title is required")
             item["title"] = clean_title
-        if status is not None:
-            if status not in VALID_STATUSES:
-                raise ValueError(f"Invalid status: {status}")
-            item["status"] = status
         if notes is not None:
             item["notes"] = notes.strip()
-        if progress_note is not None:
-            clean_note = progress_note.strip()
-            if clean_note:
-                item.setdefault("progress", []).append({"at": utc_now(), "note": clean_note})
+        self._append_progress(item, progress_note)
         item["updated_at"] = utc_now()
         self._write(data)
         return item
 
     def delete(self, item_id: str) -> bool:
         data = self._read()
+        item = self._find(data, item_id)
+        if item.get("status") not in ("cancelled", "accepted"):
+            raise ValueError("Only cancelled or accepted TODO items can be deleted")
         before = len(data["items"])
         data["items"] = [item for item in data["items"] if item.get("id") != str(item_id)]
         deleted = len(data["items"]) != before
@@ -109,12 +107,74 @@ class TodoStore:
         data = self._read()
         for item in data["items"]:
             if item.get("status") == "open":
-                item["status"] = "in_progress"
-                item.setdefault("progress", []).append({"at": utc_now(), "note": "Claimed by agent"})
-                item["updated_at"] = utc_now()
+                self._transition(item, "in_progress", progress_note="Claimed by agent")
                 self._write(data)
                 return item
         return None
+
+    def agent_done(self, item_id: str, progress_note: Optional[str] = None) -> Dict[str, Any]:
+        return self._transition_item(
+            item_id,
+            allowed_from=("in_progress",),
+            target="done",
+            progress_note=progress_note,
+        )
+
+    def agent_cancel(self, item_id: str, progress_note: Optional[str] = None) -> Dict[str, Any]:
+        raise ValueError("Agents cannot cancel TODO items")
+
+    def user_cancel(self, item_id: str, progress_note: Optional[str] = None) -> Dict[str, Any]:
+        return self._transition_item(
+            item_id,
+            allowed_from=VALID_STATUSES,
+            target="cancelled",
+            progress_note=progress_note,
+        )
+
+    def user_reject(self, item_id: str, progress_note: Optional[str] = None) -> Dict[str, Any]:
+        return self._transition_item(
+            item_id,
+            allowed_from=("done",),
+            target="open",
+            progress_note=progress_note,
+        )
+
+    def user_accept(self, item_id: str, progress_note: Optional[str] = None) -> Dict[str, Any]:
+        return self._transition_item(
+            item_id,
+            allowed_from=("done",),
+            target="accepted",
+            progress_note=progress_note,
+        )
+
+    def _transition_item(
+        self,
+        item_id: str,
+        *,
+        allowed_from: tuple[str, ...],
+        target: str,
+        progress_note: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        data = self._read()
+        item = self._find(data, item_id)
+        if item.get("status") not in allowed_from:
+            raise ValueError(f"Cannot move TODO item from {item.get('status')} to {target}")
+        self._transition(item, target, progress_note=progress_note)
+        self._write(data)
+        return item
+
+    def _transition(self, item: Dict[str, Any], status: str, progress_note: Optional[str] = None) -> None:
+        if status not in VALID_STATUSES:
+            raise ValueError(f"Invalid status: {status}")
+        item["status"] = status
+        self._append_progress(item, progress_note)
+        item["updated_at"] = utc_now()
+
+    def _append_progress(self, item: Dict[str, Any], progress_note: Optional[str] = None) -> None:
+        if progress_note is not None:
+            clean_note = progress_note.strip()
+            if clean_note:
+                item.setdefault("progress", []).append({"at": utc_now(), "note": clean_note})
 
     def _find(self, data: Dict[str, Any], item_id: str) -> Dict[str, Any]:
         for item in data["items"]:

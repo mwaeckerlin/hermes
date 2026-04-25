@@ -39,48 +39,82 @@ def test_claim_next_moves_first_open_item_to_in_progress(tmp_path):
     assert data["items"][0]["progress"][0]["note"] == "Claimed by agent"
 
 
-def test_update_validates_status_and_appends_progress(tmp_path):
+def test_agent_can_complete_only_in_progress_item(tmp_path):
+    store = TodoStore(tmp_path / "todos.json")
+    item = store.add("Implement")
+    store.claim_next()
+
+    completed = store.agent_done(item["id"], progress_note="Finished tests")
+
+    assert completed["status"] == "done"
+    assert completed["progress"][-1]["note"] == "Finished tests"
+
+
+def test_agent_cannot_complete_open_item(tmp_path):
     store = TodoStore(tmp_path / "todos.json")
     item = store.add("Implement")
 
-    updated = store.update(item["id"], status="done", progress_note="Finished tests")
-
-    assert updated["status"] == "done"
-    assert updated["progress"][-1]["note"] == "Finished tests"
+    with pytest.raises(ValueError):
+        store.agent_done(item["id"], progress_note="Too early")
 
 
-def test_cancelled_is_a_valid_status(tmp_path):
-    store = TodoStore(tmp_path / "todos.json")
-    item = store.add("Cancel me")
-
-    updated = store.update(item["id"], status="cancelled", progress_note="Cancelled by Marc")
-
-    assert updated["status"] == "cancelled"
-    assert updated["progress"][-1]["note"] == "Cancelled by Marc"
-
-
-def test_reject_done_item_reopens_with_comment(tmp_path):
+def test_user_rejects_done_item_to_open_with_comment(tmp_path):
     store = TodoStore(tmp_path / "todos.json")
     item = store.add("Review me")
-    store.update(item["id"], status="done")
+    store.claim_next()
+    store.agent_done(item["id"])
 
-    reopened = store.update(item["id"], status="open", progress_note="Needs more work")
+    reopened = store.user_reject(item["id"], progress_note="Needs more work")
 
     assert reopened["status"] == "open"
     assert reopened["progress"][-1]["note"] == "Needs more work"
 
 
-def test_update_rejects_invalid_status(tmp_path):
+def test_user_accepts_done_item(tmp_path):
+    store = TodoStore(tmp_path / "todos.json")
+    item = store.add("Accept me")
+    store.claim_next()
+    store.agent_done(item["id"])
+
+    accepted = store.user_accept(item["id"], progress_note="Looks good")
+
+    assert accepted["status"] == "accepted"
+    assert accepted["progress"][-1]["note"] == "Looks good"
+
+
+def test_user_cancels_any_state_but_agent_cannot_cancel(tmp_path):
+    store = TodoStore(tmp_path / "todos.json")
+    item = store.add("Cancel me")
+
+    cancelled = store.user_cancel(item["id"], progress_note="Cancelled by Marc")
+
+    assert cancelled["status"] == "cancelled"
+    assert cancelled["progress"][-1]["note"] == "Cancelled by Marc"
+    with pytest.raises(ValueError):
+        store.agent_cancel(item["id"], progress_note="Agent should not cancel")
+
+
+def test_delete_only_removes_cancelled_or_accepted_items(tmp_path):
+    store = TodoStore(tmp_path / "todos.json")
+    open_item = store.add("Keep me")
+    cancelled_item = store.add("Remove cancelled")
+    accepted_item = store.add("Remove accepted")
+    store.user_cancel(cancelled_item["id"])
+    store.claim_next()
+    store.agent_done(open_item["id"])
+    store.claim_next()
+    store.agent_done(accepted_item["id"])
+    store.user_accept(accepted_item["id"])
+
+    with pytest.raises(ValueError):
+        store.delete(open_item["id"])
+    assert store.delete(cancelled_item["id"]) is True
+    assert store.delete(accepted_item["id"]) is True
+
+
+def test_update_rejects_direct_status_change(tmp_path):
     store = TodoStore(tmp_path / "todos.json")
     item = store.add("Implement")
 
     with pytest.raises(ValueError):
-        store.update(item["id"], status="blocked")
-
-
-def test_delete_removes_item(tmp_path):
-    store = TodoStore(tmp_path / "todos.json")
-    item = store.add("Remove me")
-
-    assert store.delete(item["id"]) is True
-    assert store.list()["items"] == []
+        store.update(item["id"], status="done")
