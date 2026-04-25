@@ -172,8 +172,8 @@ OPENAI_API_KEY=sk-...
 GOOGLE_API_KEY=AIza...
 ```
 
-The gateway entrypoint auto-selects the default model from whichever key is set
-(priority: OpenRouter → Anthropic → Google → OpenAI). Override with
+The rendered configuration auto-selects the default model from whichever key is set
+(priority: OpenAI → OpenRouter → Anthropic → Google → LiteLLM). Override with
 `HERMES_DEFAULT_MODEL`.
 
 ### 2. Start
@@ -225,9 +225,9 @@ All optional — configure one or more. If none is set the gateway exits with an
 
 | Variable | Description |
 |---|---|
-| `OPENROUTER_API_KEY` | OpenRouter — access to 300+ models via one key. Auto-selects **`anthropic/claude-opus-4-5`**. See note below. |
+| `OPENROUTER_API_KEY` | OpenRouter — access to 300+ models via one key. Auto-selects **`openai/gpt-5.5`**. See note below. |
 | `ANTHROPIC_API_KEY` | Direct Anthropic (Claude) |
-| `OPENAI_API_KEY` | Direct OpenAI. Auto-selects **o4-mini** (a reasoning model). See note below. Also used for Whisper/TTS if `VOICE_TOOLS_OPENAI_KEY` is unset |
+| `OPENAI_API_KEY` | Direct OpenAI. Auto-selects **`gpt-5.5`**. Also used for Whisper/TTS if `VOICE_TOOLS_OPENAI_KEY` is unset |
 | `GOOGLE_API_KEY` / `GEMINI_API_KEY` | Google Gemini |
 | `LITELLM_BASE_URL` | LiteLLM proxy URL (OpenAI-compatible, e.g. `http://litellm:4000`) |
 | `LITELLM_API_KEY` | API key for the LiteLLM proxy (optional) |
@@ -242,35 +242,23 @@ All optional — configure one or more. If none is set the gateway exits with an
 > that include the routing prefix:
 >
 > ```
-> HTTP 400: openrouter/anthropic/claude-opus-4-5 is not a valid model ID
+> HTTP 400: openrouter/openai/gpt-5.5 is not a valid model ID
 > ```
 >
-> The gateway auto-selects `anthropic/claude-opus-4-5` when
+> The rendered configuration auto-selects `openai/gpt-5.5` when
 > `OPENROUTER_API_KEY` is set. To use a different model, override with
 > `HERMES_DEFAULT_MODEL=<openrouter-model-slug>` (e.g.
 > `anthropic/claude-3-opus`). Check <https://openrouter.ai/models> for the
 > exact model slugs.
 
-> **OpenAI — organization verification required for reasoning models**
+> **OpenAI — model ID**
 >
-> When `OPENAI_API_KEY` is set, Hermes auto-selects **o4-mini** as the default
-> model because the Responses API transport always enables reasoning
-> (`reasoning.encrypted_content`), which non-o-series models (e.g. `gpt-4o`)
-> reject with HTTP 400.
+> When `OPENAI_API_KEY` is set, Hermes auto-selects **`gpt-5.5`** as the default
+> model. The OpenAI API key remains the token; `gpt-5.5` is the model ID sent to
+> the OpenAI API.
 >
-> o4-mini is an OpenAI reasoning model and requires your OpenAI **organization
-> to be verified** before it can generate reasoning summaries. Without
-> verification you will see:
->
-> ```
-> HTTP 400: Your organization must be verified to generate reasoning summaries.
-> ```
->
-> **Fix:** go to <https://platform.openai.com/settings/organization/general>
-> and click **Verify Organization**. Access propagates within ~15 minutes.
->
-> If you cannot or do not want to verify, use a different provider (OpenRouter,
-> Anthropic, or Google Gemini) instead of a bare `OPENAI_API_KEY`.
+> Override with `HERMES_DEFAULT_MODEL=<openai-model-id>` if the OpenAI account
+> should use a different model.
 
 ### Messaging Channels
 
@@ -289,6 +277,10 @@ Channels are enabled by setting the corresponding token. No explicit `enabled: t
 | `WHATSAPP_ENABLED` | `true` to enable. Run `hermes whatsapp` to pair. |
 | `WHATSAPP_ALLOWED_USERS` | Comma-separated phone numbers |
 | `GATEWAY_ALLOW_ALL_USERS` | `true` (Hermes default) = anyone in your chat groups can use the bot; set to `false` and configure per-platform `*_ALLOWED_USERS` for production. |
+
+For Telegram bots created with @BotFather: if the bot should also work in group
+chats, run `/setprivacy` in BotFather and set the bot to `Disable`. Otherwise
+Telegram privacy mode will prevent the bot from seeing normal group messages.
 
 When a new user contacts the bot for the first time, they receive a random pairing
 code and are asked to pass it to the bot owner for approval. To approve (or revoke)
