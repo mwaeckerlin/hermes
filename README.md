@@ -46,9 +46,10 @@ It stores tasks in the Hermes data volume, not on a public server.
 
 Open the dashboard and select the **TODO** tab to:
 
-- add tasks
-- claim the next open task
-- move tasks between `open`, `in_progress`, and `done`
+- add or cancel tasks as the human operator
+- reject a `done` task back to `open` with a comment
+- claim the next open task as the agent
+- move tasks through `open`, `in_progress`, `done`, and `cancelled`
 - append short progress notes
 
 The plugin persists JSON at:
@@ -56,6 +57,11 @@ The plugin persists JSON at:
 ```text
 $HERMES_HOME/todo-plugin/todos.json
 ```
+
+In this compose setup, dashboard and gateway both mount the `hermes-data` volume at
+`/opt/data`, so TODO data survives container rebuilds and is visible to the
+agent runtime via the shared Hermes data volume. The SSH sandbox remains isolated
+and does not mount this volume directly.
 
 Override the path if needed:
 

@@ -49,6 +49,27 @@ def test_update_validates_status_and_appends_progress(tmp_path):
     assert updated["progress"][-1]["note"] == "Finished tests"
 
 
+def test_cancelled_is_a_valid_status(tmp_path):
+    store = TodoStore(tmp_path / "todos.json")
+    item = store.add("Cancel me")
+
+    updated = store.update(item["id"], status="cancelled", progress_note="Cancelled by Marc")
+
+    assert updated["status"] == "cancelled"
+    assert updated["progress"][-1]["note"] == "Cancelled by Marc"
+
+
+def test_reject_done_item_reopens_with_comment(tmp_path):
+    store = TodoStore(tmp_path / "todos.json")
+    item = store.add("Review me")
+    store.update(item["id"], status="done")
+
+    reopened = store.update(item["id"], status="open", progress_note="Needs more work")
+
+    assert reopened["status"] == "open"
+    assert reopened["progress"][-1]["note"] == "Needs more work"
+
+
 def test_update_rejects_invalid_status(tmp_path):
     store = TodoStore(tmp_path / "todos.json")
     item = store.add("Implement")

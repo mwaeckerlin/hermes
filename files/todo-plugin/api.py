@@ -1,12 +1,19 @@
 """Local TODO-list API for the Hermes dashboard plugin."""
 
+import importlib.util
+from pathlib import Path
+
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-try:
-    from .storage import TodoStore, VALID_STATUSES
-except ImportError:  # pragma: no cover - dashboard plugin loader path
-    from storage import TodoStore, VALID_STATUSES
+_storage_path = Path(__file__).with_name("storage.py")
+_storage_spec = importlib.util.spec_from_file_location("hermes_todo_storage", _storage_path)
+if _storage_spec is None or _storage_spec.loader is None:  # pragma: no cover
+    raise RuntimeError("Cannot load TODO storage module")
+_storage_module = importlib.util.module_from_spec(_storage_spec)
+_storage_spec.loader.exec_module(_storage_module)
+TodoStore = _storage_module.TodoStore
+VALID_STATUSES = _storage_module.VALID_STATUSES
 
 router = APIRouter()
 _store = TodoStore()
@@ -68,6 +75,26 @@ async def claim_next_todo():
     """Move the first open TODO item to in_progress."""
     item = _store.claim_next()
     return {"ok": item is not None, "item": item}
+
+
+@router.post("/cancel/{item_id}")
+async def cancel_todo(item_id: str, req: UpdateTodoRequest):
+    """Cancel a TODO with an optional human comment."""
+    try:
+        item = _store.update(item_id, status="cancelled", progress_note=req.progress_note)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"ok": True, "item": item}
+
+
+@router.post("/reject/{item_id}")
+async def reject_todo(item_id: str, req: UpdateTodoRequest):
+    """Reject a done TODO and move it back to open with a human comment."""
+    try:
+        item = _store.update(item_id, status="open", progress_note=req.progress_note)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"ok": True, "item": item}
 
 
 @router.post("/delete")
