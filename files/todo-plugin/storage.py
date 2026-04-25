@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-VALID_STATUSES = ("open", "in_progress", "done")
+VALID_STATUSES = ("open", "in_progress", "done", "cancelled")
 DEFAULT_STATUS = "open"
 
 
