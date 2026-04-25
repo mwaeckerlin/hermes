@@ -1,0 +1,13 @@
+{
+  "name": "todo",
+  "label": "TODO",
+  "description": "Local TODO list for simple agent task tracking",
+  "icon": "ListTodo",
+  "version": "1.0.0",
+  "tab": {
+    "path": "/todo",
+    "position": "end"
+  },
+  "entry": "dist/index.js",
+  "api": "api.py"
+}

@@ -39,6 +39,31 @@ cloud Docker {
 
 </details>
 
+## Local TODO Dashboard Plugin
+
+The dashboard image includes a small local TODO plugin for agent task tracking.
+It stores tasks in the Hermes data volume, not on a public server.
+
+Open the dashboard and select the **TODO** tab to:
+
+- add tasks
+- claim the next open task
+- move tasks between `open`, `in_progress`, and `done`
+- append short progress notes
+
+The plugin persists JSON at:
+
+```text
+$HERMES_HOME/todo-plugin/todos.json
+```
+
+Override the path if needed:
+
+```yaml
+environment:
+  HERMES_TODO_FILE: /opt/data/todo-plugin/todos.json
+```
+
 ## Security Model
 
 The primary security mechanism is **strict isolation**: the AI runs in a dedicated
