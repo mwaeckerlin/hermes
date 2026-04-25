@@ -172,8 +172,8 @@ OPENAI_API_KEY=sk-...
 GOOGLE_API_KEY=AIza...
 ```
 
-The gateway entrypoint auto-selects the default model from whichever key is set
-(priority: OpenRouter → Anthropic → Google → OpenAI). Override with
+The rendered configuration auto-selects the default model from whichever key is set
+(priority: OpenAI → OpenRouter → Anthropic → Google → LiteLLM). Override with
 `HERMES_DEFAULT_MODEL`.
 
 ### 2. Start
@@ -225,9 +225,9 @@ All optional — configure one or more. If none is set the gateway exits with an
 
 | Variable | Description |
 |---|---|
-| `OPENROUTER_API_KEY` | OpenRouter — access to 300+ models via one key. Auto-selects **`anthropic/claude-opus-4-5`**. See note below. |
+| `OPENROUTER_API_KEY` | OpenRouter — access to 300+ models via one key. Auto-selects **`openai/gpt-5.5`**. See note below. |
 | `ANTHROPIC_API_KEY` | Direct Anthropic (Claude) |
-| `OPENAI_API_KEY` | Direct OpenAI. Auto-selects **o4-mini** (a reasoning model). See note below. Also used for Whisper/TTS if `VOICE_TOOLS_OPENAI_KEY` is unset |
+| `OPENAI_API_KEY` | Direct OpenAI. Auto-selects **`gpt-5.5`**. Also used for Whisper/TTS if `VOICE_TOOLS_OPENAI_KEY` is unset |
 | `GOOGLE_API_KEY` / `GEMINI_API_KEY` | Google Gemini |
 | `LITELLM_BASE_URL` | LiteLLM proxy URL (OpenAI-compatible, e.g. `http://litellm:4000`) |
 | `LITELLM_API_KEY` | API key for the LiteLLM proxy (optional) |
@@ -242,35 +242,23 @@ All optional — configure one or more. If none is set the gateway exits with an
 > that include the routing prefix:
 >
 > ```
-> HTTP 400: openrouter/anthropic/claude-opus-4-5 is not a valid model ID
+> HTTP 400: openrouter/openai/gpt-5.5 is not a valid model ID
 > ```
 >
-> The gateway auto-selects `anthropic/claude-opus-4-5` when
+> The rendered configuration auto-selects `openai/gpt-5.5` when
 > `OPENROUTER_API_KEY` is set. To use a different model, override with
 > `HERMES_DEFAULT_MODEL=<openrouter-model-slug>` (e.g.
 > `anthropic/claude-3-opus`). Check <https://openrouter.ai/models> for the
 > exact model slugs.
 
-> **OpenAI — organization verification required for reasoning models**
+> **OpenAI — model ID**
 >
-> When `OPENAI_API_KEY` is set, Hermes auto-selects **o4-mini** as the default
-> model because the Responses API transport always enables reasoning
-> (`reasoning.encrypted_content`), which non-o-series models (e.g. `gpt-4o`)
-> reject with HTTP 400.
+> When `OPENAI_API_KEY` is set, Hermes auto-selects **`gpt-5.5`** as the default
+> model. The OpenAI API key remains the token; `gpt-5.5` is the model ID sent to
+> the OpenAI API.
 >
-> o4-mini is an OpenAI reasoning model and requires your OpenAI **organization
-> to be verified** before it can generate reasoning summaries. Without
-> verification you will see:
->
-> ```
-> HTTP 400: Your organization must be verified to generate reasoning summaries.
-> ```
->
-> **Fix:** go to <https://platform.openai.com/settings/organization/general>
-> and click **Verify Organization**. Access propagates within ~15 minutes.
->
-> If you cannot or do not want to verify, use a different provider (OpenRouter,
-> Anthropic, or Google Gemini) instead of a bare `OPENAI_API_KEY`.
+> Override with `HERMES_DEFAULT_MODEL=<openai-model-id>` if the OpenAI account
+> should use a different model.
 
 ### Messaging Channels
 
@@ -290,11 +278,29 @@ Channels are enabled by setting the corresponding token. No explicit `enabled: t
 | `WHATSAPP_ALLOWED_USERS` | Comma-separated phone numbers |
 | `GATEWAY_ALLOW_ALL_USERS` | `true` (Hermes default) = anyone in your chat groups can use the bot; set to `false` and configure per-platform `*_ALLOWED_USERS` for production. |
 
+For Telegram bots created with @BotFather: if the bot should also work in group
+chats, run `/setprivacy` in BotFather and set the bot to `Disable`. Otherwise
+Telegram privacy mode will prevent the bot from seeing normal group messages.
+
 When a new user contacts the bot for the first time, they receive a random pairing
 code and are asked to pass it to the bot owner for approval. To approve (or revoke)
 users, open the **Dashboard → Pairing** tab at `http://localhost:9119/pairing`.
 The Pairing tab lists all pending codes with one-click **Approve** buttons, and
 shows all approved users with **Revoke** buttons. No CLI required.
+
+### Command Approvals
+
+This deployment executes agent commands inside the isolated SSH sandbox. The
+sandbox has no gateway secrets, no LLM tokens, and no direct host filesystem
+access, so command approval prompts are disabled by default:
+
+```yaml
+approvals:
+  mode: off
+```
+
+Use `HERMES_APPROVALS_MODE=manual` or `HERMES_APPROVALS_MODE=smart` if you run a
+different deployment where terminal commands can affect trusted systems.
 
 ### Tool API Keys
 
@@ -305,11 +311,128 @@ shows all approved users with **Revoke** buttons. No CLI required.
 | `EXA_API_KEY` | Exa web search |
 | `FIRECRAWL_API_KEY` | Firecrawl web scrape / crawl |
 | `PARALLEL_API_KEY` | Parallel web extract |
+| `TAVILY_API_KEY` | Tavily web search / extract |
 | `FAL_KEY` | fal.ai image generation |
 | `BROWSERBASE_API_KEY` | Browserbase cloud browser automation |
 | `BROWSERBASE_PROJECT_ID` | Browserbase project ID |
 | `ELEVENLABS_API_KEY` | ElevenLabs premium TTS |
 | `GITHUB_TOKEN` | GitHub token (Skills Hub + higher rate limits) |
+
+### Text-to-Speech Configuration
+
+Hermes can reply to voice messages with a synthesized voice. By default it uses
+**Microsoft TTS** — free, no API key required. When `ELEVENLABS_API_KEY` is set,
+ElevenLabs is selected automatically for higher-quality audio.
+
+**Automatic language matching** (`model_overrides.enabled: true`, the default)
+instructs the TTS provider to select a voice that matches the detected language of
+the text. German text gets a German voice, French text gets a French voice, etc.
+
+| Variable | Description |
+|---|---|
+| `HERMES_TTS_ENABLED` | `false` to disable voice replies to voice messages (default: `true`) |
+| `HERMES_TTS_PROVIDER` | TTS provider when no API key auto-selects one (default: `microsoft`) |
+| `HERMES_TTS_MODEL_OVERRIDES_ENABLED` | `false` to disable automatic language-matched voice selection (default: `true`) |
+| `HERMES_TTS_YAML` | Override the entire `tts:` section with a JSON/YAML string |
+
+**Provider auto-selection priority:**
+
+1. If `ELEVENLABS_API_KEY` is set → `elevenlabs`
+2. Otherwise → `microsoft` (free, no key needed)
+
+Override with `HERMES_TTS_PROVIDER` or use `HERMES_TTS_YAML` for full
+customization of the TTS section.
+
+### Vision Configuration
+
+Hermes uses a dedicated vision model to understand images sent in chat. Vision is
+configured under `auxiliary.vision` (not a top-level key). The provider and model
+are **auto-selected** based on whichever LLM API key is active:
+
+| Active key | Default vision provider & model |
+|---|---|
+| `OPENROUTER_API_KEY` | `openrouter` / `anthropic/claude-sonnet-4` |
+| `ANTHROPIC_API_KEY` | `anthropic` / `claude-sonnet-4-5` |
+| `GOOGLE_API_KEY` / `GEMINI_API_KEY` | `gemini` / `gemini-2.0-flash` |
+| `OPENAI_API_KEY` | `openai` / `gpt-4o` |
+| `LITELLM_BASE_URL` | LiteLLM proxy / `LITELLM_DEFAULT_MODEL` (or `gpt-4o`) |
+
+| Variable | Description |
+|---|---|
+| `HERMES_VISION_PROVIDER` | Override the auto-selected vision provider (`auxiliary.vision.provider`) |
+| `HERMES_VISION_MODEL` | Override the auto-selected vision model (`auxiliary.vision.model`) |
+| `HERMES_AUXILIARY_YAML` | Override the entire `auxiliary:` section (compression + vision + web_extract) |
+
+### Web Search Backend
+
+Web tools auto-select a backend based on available API keys (priority: Firecrawl → Parallel → Tavily → Exa).
+
+| Variable | Description |
+|---|---|
+| `HERMES_WEB_BACKEND` | Force a specific backend: `firecrawl` \| `parallel` \| `tavily` \| `exa` |
+| `HERMES_WEB_YAML` | Override the entire `web:` section with a JSON/YAML string |
+| `FIRECRAWL_API_KEY` | Firecrawl API key (search + scrape + crawl) |
+| `PARALLEL_API_KEY` | Parallel API key (search + extract) |
+| `TAVILY_API_KEY` | Tavily API key (search + extract + crawl) |
+| `EXA_API_KEY` | Exa API key (search + extract) |
+
+### Browser Automation
+
+| Variable | Description |
+|---|---|
+| `HERMES_BROWSER_INACTIVITY_TIMEOUT` | Seconds before an idle browser session is auto-closed (default: `120`) |
+| `HERMES_BROWSER_COMMAND_TIMEOUT` | Timeout in seconds for browser commands (default: Hermes built-in) |
+| `HERMES_BROWSER_CDP_URL` | Attach to an existing Chrome via CDP URL instead of launching a headless browser |
+| `HERMES_BROWSER_YAML` | Override the entire `browser:` section with a JSON/YAML string |
+
+### Privacy — PII Redaction
+
+When `HERMES_PRIVACY_REDACT_PII=true`, the gateway hashes phone numbers, user IDs and
+chat IDs in the system prompt before sending context to the LLM.
+
+| Variable | Description |
+|---|---|
+| `HERMES_PRIVACY_REDACT_PII` | `true` to enable PII redaction (default: `false`) |
+| `HERMES_PRIVACY_YAML` | Override the entire `privacy:` section with a JSON/YAML string |
+
+### Human Delay
+
+Simulate human-like response pacing in messaging platforms.
+
+| Variable | Description |
+|---|---|
+| `HERMES_HUMAN_DELAY_MODE` | `off` (default) \| `natural` \| `custom` |
+| `HERMES_HUMAN_DELAY_MIN_MS` | Minimum delay in ms (custom mode, default: `800`) |
+| `HERMES_HUMAN_DELAY_MAX_MS` | Maximum delay in ms (custom mode, default: `2500`) |
+| `HERMES_HUMAN_DELAY_YAML` | Override the entire `human_delay:` section |
+
+### Prompt Caching
+
+Controls the Anthropic prompt cache TTL. Only affects Claude models via the Anthropic
+API or OpenRouter.
+
+| Variable | Description |
+|---|---|
+| `HERMES_PROMPT_CACHING_TTL` | Cache TTL: `5m` (default) or `1h` for long sessions with pauses |
+| `HERMES_PROMPT_CACHING_YAML` | Override the entire `prompt_caching:` section |
+
+### OpenRouter Provider Routing
+
+Controls how requests are routed across providers on OpenRouter.
+Only active when `OPENROUTER_API_KEY` is set.
+
+| Variable | Description |
+|---|---|
+| `HERMES_PROVIDER_ROUTING_SORT` | Sort strategy: `price` (default) \| `throughput` \| `latency` |
+| `HERMES_PROVIDER_ROUTING_YAML` | Full `provider_routing:` override (supports `sort`, `only`, `ignore`, `order`, etc.) |
+
+### Miscellaneous Settings
+
+| Variable | config.yaml key | Description |
+|---|---|---|
+| `HERMES_UNAUTHORIZED_DM_BEHAVIOR` | `unauthorized_dm_behavior` | `pair` (default — send pairing code) \| `ignore` |
+| `HERMES_TIMEZONE` | `timezone` | IANA timezone string (e.g. `Europe/Berlin`). Default: server-local time |
+| `HERMES_FILE_READ_MAX_CHARS` | `file_read_max_chars` | Max chars per `read_file` call. Hermes default: 100 000 |
 
 ### config.yaml — Section-Level Overrides
 
@@ -330,6 +453,16 @@ completely replaced by setting `HERMES_<SECTION>_YAML` to a JSON string
 | `HERMES_AGENT_YAML` | `agent:` |
 | `HERMES_PLATFORM_TOOLSETS_YAML` | `platform_toolsets:` |
 | `HERMES_STT_YAML` | `stt:` |
+| `HERMES_TTS_YAML` | `tts:` |
+| `HERMES_AUXILIARY_YAML` | `auxiliary:` (compression + vision + web_extract) |
+| `HERMES_TOOL_OUTPUT_YAML` | `tool_output:` |
+| `HERMES_WEB_YAML` | `web:` |
+| `HERMES_BROWSER_YAML` | `browser:` |
+| `HERMES_PRIVACY_YAML` | `privacy:` |
+| `HERMES_VOICE_YAML` | `voice:` |
+| `HERMES_HUMAN_DELAY_YAML` | `human_delay:` |
+| `HERMES_PROMPT_CACHING_YAML` | `prompt_caching:` |
+| `HERMES_PROVIDER_ROUTING_YAML` | `provider_routing:` |
 | `HERMES_CODE_EXECUTION_YAML` | `code_execution:` |
 | `HERMES_DELEGATION_YAML` | `delegation:` |
 | `HERMES_MCP_SERVERS_YAML` | `mcp_servers:` |
@@ -370,6 +503,31 @@ HERMES_PLATFORM_TOOLSETS_YAML='{"telegram":["web","terminal","file","skills","to
 | `HERMES_STREAMING_ENABLED` | `streaming.enabled` | `false` |
 | `HERMES_SKILLS_NUDGE_INTERVAL` | `skills.creation_nudge_interval` | `15` |
 | `HERMES_STT_ENABLED` | `stt.enabled` | `true` |
+| `HERMES_TTS_ENABLED` | `tts.enabled` | `true` |
+| `HERMES_TTS_PROVIDER` | `tts.provider` | `microsoft` (or `elevenlabs` if key set) |
+| `HERMES_TTS_MODEL_OVERRIDES_ENABLED` | `tts.model_overrides.enabled` | `true` |
+| `HERMES_VISION_PROVIDER` | `auxiliary.vision.provider` | auto-selected from active LLM provider |
+| `HERMES_VISION_MODEL` | `auxiliary.vision.model` | auto-selected per provider (see Vision section) |
+| `HERMES_WEB_EXTRACT_PROVIDER` | `auxiliary.web_extract.provider` | `auto` |
+| `HERMES_WEB_EXTRACT_MODEL` | `auxiliary.web_extract.model` | — |
+| `HERMES_FILE_READ_MAX_CHARS` | `file_read_max_chars` | — (Hermes default: 100 000) |
+| `HERMES_TOOL_OUTPUT_MAX_BYTES` | `tool_output.max_bytes` | — (Hermes default: 50 000) |
+| `HERMES_TOOL_OUTPUT_MAX_LINES` | `tool_output.max_lines` | — (Hermes default: 2000) |
+| `HERMES_TOOL_OUTPUT_MAX_LINE_LENGTH` | `tool_output.max_line_length` | — (Hermes default: 2000) |
+| `HERMES_WEB_BACKEND` | `web.backend` | auto-detected from API keys |
+| `HERMES_BROWSER_INACTIVITY_TIMEOUT` | `browser.inactivity_timeout` | `120` |
+| `HERMES_BROWSER_COMMAND_TIMEOUT` | `browser.command_timeout` | — |
+| `HERMES_BROWSER_CDP_URL` | `browser.cdp_url` | — |
+| `HERMES_PRIVACY_REDACT_PII` | `privacy.redact_pii` | `false` |
+| `HERMES_VOICE_AUTO_TTS` | `voice.auto_tts` | `false` |
+| `HERMES_VOICE_MAX_RECORDING_SECONDS` | `voice.max_recording_seconds` | `120` |
+| `HERMES_HUMAN_DELAY_MODE` | `human_delay.mode` | — (`off`) |
+| `HERMES_HUMAN_DELAY_MIN_MS` | `human_delay.min_ms` | `800` |
+| `HERMES_HUMAN_DELAY_MAX_MS` | `human_delay.max_ms` | `2500` |
+| `HERMES_PROMPT_CACHING_TTL` | `prompt_caching.cache_ttl` | — (`5m`) |
+| `HERMES_PROVIDER_ROUTING_SORT` | `provider_routing.sort` | — (`price`) |
+| `HERMES_UNAUTHORIZED_DM_BEHAVIOR` | `unauthorized_dm_behavior` | — (`pair`) |
+| `HERMES_TIMEZONE` | `timezone` | — (server-local) |
 | `HERMES_DISPLAY_TOOL_PROGRESS` | `display.tool_progress` | `all` |
 | `HERMES_DISPLAY_COMPACT` | `display.compact` | `false` |
 | `HERMES_DISPLAY_SKIN` | `display.skin` | `default` |
@@ -377,13 +535,14 @@ HERMES_PLATFORM_TOOLSETS_YAML='{"telegram":["web","terminal","file","skills","to
 ### Config Persistence
 
 `config.yaml` is stored in the `hermes-data` Docker volume (`/opt/data`).
-On first start it is rendered from the template. On subsequent starts the
-existing file is preserved unless `OVERWRITE_CONFIG` is set.
+On startup it is rendered from the template and written to the volume by default.
+This keeps template defaults such as disabled command approvals in sync with the
+container image.
 
-To force a re-render without losing the volume:
+To preserve manual edits in the volume:
 
 ```bash
-OVERWRITE_CONFIG=true npm start
+OVERWRITE_CONFIG=false npm start
 ```
 
 To edit `config.yaml` directly (advanced):

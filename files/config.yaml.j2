@@ -16,11 +16,51 @@
 model: {{ HERMES_MODEL_YAML }}
 {% else %}
 model:
-  # Set HERMES_DEFAULT_MODEL env var to override; entrypoint auto-selects from available API keys.
-  default: "{{ HERMES_DEFAULT_MODEL | default('anthropic/claude-opus-4.6') }}"
-  provider: "{{ HERMES_MODEL_PROVIDER | default('auto') }}"
+  # Set HERMES_DEFAULT_MODEL env var to override; otherwise auto-select from available API keys.
+  # Priority: LiteLLM → OpenRouter → OpenAI → Anthropic → Google
+{% if HERMES_DEFAULT_MODEL | default('') %}
+  default: "{{ HERMES_DEFAULT_MODEL }}"
+{% elif LITELLM_BASE_URL | default('') %}
+  default: "{{ LITELLM_DEFAULT_MODEL | default('gpt-4o') }}"
+{% elif OPENROUTER_API_KEY | default('') %}
+  default: "openai/gpt-5.5"
+{% elif OPENAI_API_KEY | default('') %}
+  default: "gpt-5.5"
+{% elif ANTHROPIC_API_KEY | default('') %}
+  default: "anthropic/claude-opus-4.6"
+{% elif GOOGLE_API_KEY | default('') or GEMINI_API_KEY | default('') %}
+  default: "gemini/gemini-2.5-pro"
+{% else %}
+  default: "openai/gpt-5.5"
+{% endif %}
+  # Provider routing:
+  # - "custom": use custom base_url (LiteLLM)
+  # - "auto": Hermes knows the standard endpoints for this provider
+{% if HERMES_MODEL_PROVIDER | default('') %}
+  provider: "{{ HERMES_MODEL_PROVIDER }}"
+{% elif LITELLM_BASE_URL | default('') %}
+  provider: "custom"
+{% elif OPENROUTER_API_KEY | default('') %}
+  provider: "auto"
+{% elif OPENAI_API_KEY | default('') %}
+  provider: "auto"
+{% elif ANTHROPIC_API_KEY | default('') %}
+  provider: "auto"
+{% elif GOOGLE_API_KEY | default('') or GEMINI_API_KEY | default('') %}
+  provider: "auto"
+{% else %}
+  provider: "auto"
+{% endif %}
+  # Base URL configuration:
+  # - Explicitly set for custom endpoints (LiteLLM)
+  # - OpenAI, Anthropic, Google: Hermes knows the standard endpoints
+  # - OpenRouter: Hermes knows the standard endpoint
 {% if HERMES_MODEL_BASE_URL | default('') %}
   base_url: "{{ HERMES_MODEL_BASE_URL }}"
+{% elif LITELLM_BASE_URL | default('') %}
+  base_url: "{{ LITELLM_BASE_URL }}"
+{% elif OPENAI_API_KEY | default('') and not (LITELLM_BASE_URL | default('') or OPENROUTER_API_KEY | default('') or ANTHROPIC_API_KEY | default('') or GOOGLE_API_KEY | default('') or GEMINI_API_KEY | default('')) %}
+  base_url: "https://api.openai.com/v1"
 {% endif %}
 {% if HERMES_MODEL_MAX_TOKENS | default('') %}
   max_tokens: {{ HERMES_MODEL_MAX_TOKENS | int }}
@@ -38,14 +78,14 @@ terminal:
   # Connection target: hermes-sandbox container, user 'somebody'
   ssh_host: "{{ HERMES_TERMINAL_SSH_HOST | default('hermes-sandbox') }}"
   ssh_user: "{{ HERMES_TERMINAL_SSH_USER | default('somebody') }}"
-  ssh_port: {{ HERMES_TERMINAL_SSH_PORT | default('22') | int }}
+  ssh_port: {{ HERMES_TERMINAL_SSH_PORT | default('22', true) | int }}
   # SSH key is written to $HERMES_HOME/.ssh/hermes-sandbox by entrypoint.sh;
   # use the absolute path from TERMINAL_SSH_KEY (set before rendering) so that
   # tilde-expansion to the hermes user's home directory does not break lookups.
   ssh_key: "{{ TERMINAL_SSH_KEY }}"
   cwd: "~"
-  timeout: {{ HERMES_TERMINAL_TIMEOUT | default('180') | int }}
-  lifetime_seconds: {{ HERMES_TERMINAL_LIFETIME | default('300') | int }}
+  timeout: {{ HERMES_TERMINAL_TIMEOUT | default('180', true) | int }}
+  lifetime_seconds: {{ HERMES_TERMINAL_LIFETIME | default('300', true) | int }}
 {% endif %}
 
 # =============================================================================
@@ -58,47 +98,75 @@ compression:
   enabled: {{ HERMES_COMPRESSION_ENABLED | default('true') }}
   threshold: {{ HERMES_COMPRESSION_THRESHOLD | default('0.50') }}
   target_ratio: {{ HERMES_COMPRESSION_TARGET_RATIO | default('0.20') }}
-  protect_last_n: {{ HERMES_COMPRESSION_PROTECT_LAST_N | default('20') | int }}
+  protect_last_n: {{ HERMES_COMPRESSION_PROTECT_LAST_N | default('20', true) | int }}
 {% endif %}
 
 # =============================================================================
-# Auxiliary LLM (context compression / summarization / memory flush)
+# Auxiliary LLM (vision / web extract / compression / memory flush)
 # =============================================================================
-# Hermes auto-detects auxiliary via OpenRouter → Nous → Codex.  When none of
-# those keys are present we must configure the auxiliary explicitly with the
-# correct provider name; otherwise the compressor silently drops middle turns.
-# Mirror the same provider-priority order used by the entrypoint for the main
-# model so the auxiliary always uses the same credentials.
+# Hermes uses lightweight auxiliary models for image analysis, web-page
+# summarization, context compression, and memory flush.  By default it
+# auto-detects the best available provider (OpenRouter → Nous → Codex).
+# When none of those keys are present the provider must be explicit so the
+# compressor never silently drops middle turns.
+# Vision defaults to the best multimodal model for the active LLM provider.
 {% if HERMES_AUXILIARY_YAML | default('') %}
 auxiliary: {{ HERMES_AUXILIARY_YAML }}
-{% elif OPENROUTER_API_KEY | default('') %}
-{# OpenRouter is available — Hermes auto-detect handles this correctly #}
-{% elif ANTHROPIC_API_KEY | default('') %}
+{% else %}
 auxiliary:
+  # ── Context compression ──────────────────────────────────────────────────
   compression:
+{% if OPENROUTER_API_KEY | default('') %}
+    provider: "auto"
+{% elif ANTHROPIC_API_KEY | default('') %}
     provider: "anthropic"
     model: "claude-haiku-4-5"
 {% elif GOOGLE_API_KEY | default('') or GEMINI_API_KEY | default('') %}
-auxiliary:
-  compression:
     provider: "gemini"
     model: "gemini-2.0-flash"
 {% elif OPENAI_API_KEY | default('') %}
-auxiliary:
-  compression:
-    # "openai" is not a named Hermes provider.  Use the custom-endpoint path
-    # instead: Hermes auto-applies OPENAI_API_KEY for any base_url pointing at
-    # api.openai.com, so no explicit provider or api_key field is needed.
-    # Use o4-mini (not gpt-4o-mini): Hermes routes auxiliary calls through the
-    # Responses API transport which always includes reasoning.encrypted_content;
+    # "openai" is not a named Hermes provider — use custom-endpoint path.
+    # o4-mini is used because Hermes routes auxiliary calls through the
+    # Responses API which always includes reasoning.encrypted_content;
     # non-o-series models reject that with HTTP 400.
     base_url: "https://api.openai.com/v1"
     model: "o4-mini"
 {% elif LITELLM_BASE_URL | default('') %}
-auxiliary:
-  compression:
     base_url: "{{ LITELLM_BASE_URL }}"
     model: "{{ LITELLM_DEFAULT_MODEL | default('gpt-4o-mini') }}"
+{% else %}
+    provider: "auto"
+{% endif %}
+  # ── Vision (image analysis, browser screenshots) ─────────────────────────
+  # Defaults to the best vision-capable model for the active LLM provider.
+  vision:
+{% if OPENROUTER_API_KEY | default('') %}
+    provider: "{{ HERMES_VISION_PROVIDER | default('openrouter') }}"
+    model: "{{ HERMES_VISION_MODEL | default('anthropic/claude-sonnet-4') }}"
+{% elif ANTHROPIC_API_KEY | default('') %}
+    provider: "{{ HERMES_VISION_PROVIDER | default('anthropic') }}"
+    model: "{{ HERMES_VISION_MODEL | default('claude-sonnet-4-5') }}"
+{% elif GOOGLE_API_KEY | default('') or GEMINI_API_KEY | default('') %}
+    provider: "{{ HERMES_VISION_PROVIDER | default('gemini') }}"
+    model: "{{ HERMES_VISION_MODEL | default('gemini-2.0-flash') }}"
+{% elif OPENAI_API_KEY | default('') %}
+    provider: "{{ HERMES_VISION_PROVIDER | default('openai') }}"
+    model: "{{ HERMES_VISION_MODEL | default('gpt-4o') }}"
+{% elif LITELLM_BASE_URL | default('') %}
+    base_url: "{{ LITELLM_BASE_URL }}"
+    model: "{{ HERMES_VISION_MODEL | default(LITELLM_DEFAULT_MODEL | default('gpt-4o')) }}"
+{% else %}
+    provider: "{{ HERMES_VISION_PROVIDER | default('auto') }}"
+{% if HERMES_VISION_MODEL | default('') %}
+    model: "{{ HERMES_VISION_MODEL }}"
+{% endif %}
+{% endif %}
+  # ── Web extract (page summarization + browser text extraction) ───────────
+  web_extract:
+    provider: "{{ HERMES_WEB_EXTRACT_PROVIDER | default('auto') }}"
+{% if HERMES_WEB_EXTRACT_MODEL | default('') %}
+    model: "{{ HERMES_WEB_EXTRACT_MODEL }}"
+{% endif %}
 {% endif %}
 
 # =============================================================================
@@ -110,10 +178,10 @@ memory: {{ HERMES_MEMORY_YAML }}
 memory:
   memory_enabled: {{ HERMES_MEMORY_ENABLED | default('true') }}
   user_profile_enabled: {{ HERMES_USER_PROFILE_ENABLED | default('true') }}
-  memory_char_limit: {{ HERMES_MEMORY_CHAR_LIMIT | default('2200') | int }}
-  user_char_limit: {{ HERMES_USER_CHAR_LIMIT | default('1375') | int }}
-  nudge_interval: {{ HERMES_MEMORY_NUDGE_INTERVAL | default('10') | int }}
-  flush_min_turns: {{ HERMES_MEMORY_FLUSH_MIN_TURNS | default('6') | int }}
+  memory_char_limit: {{ HERMES_MEMORY_CHAR_LIMIT | default('2200', true) | int }}
+  user_char_limit: {{ HERMES_USER_CHAR_LIMIT | default('1375', true) | int }}
+  nudge_interval: {{ HERMES_MEMORY_NUDGE_INTERVAL | default('10', true) | int }}
+  flush_min_turns: {{ HERMES_MEMORY_FLUSH_MIN_TURNS | default('6', true) | int }}
 {% endif %}
 
 # =============================================================================
@@ -124,8 +192,8 @@ session_reset: {{ HERMES_SESSION_RESET_YAML }}
 {% else %}
 session_reset:
   mode: "{{ HERMES_SESSION_RESET_MODE | default('both') }}"
-  idle_minutes: {{ HERMES_SESSION_RESET_IDLE_MINUTES | default('1440') | int }}
-  at_hour: {{ HERMES_SESSION_RESET_AT_HOUR | default('4') | int }}
+  idle_minutes: {{ HERMES_SESSION_RESET_IDLE_MINUTES | default('1440', true) | int }}
+  at_hour: {{ HERMES_SESSION_RESET_AT_HOUR | default('4', true) | int }}
 {% endif %}
 
 group_sessions_per_user: {{ HERMES_GROUP_SESSIONS_PER_USER | default('true') }}
@@ -140,7 +208,7 @@ streaming:
   enabled: {{ HERMES_STREAMING_ENABLED | default('false') }}
 {% if HERMES_STREAMING_ENABLED | default('') == 'true' %}
   edit_interval: {{ HERMES_STREAMING_EDIT_INTERVAL | default('0.3') }}
-  buffer_threshold: {{ HERMES_STREAMING_BUFFER_THRESHOLD | default('40') | int }}
+  buffer_threshold: {{ HERMES_STREAMING_BUFFER_THRESHOLD | default('40', true) | int }}
 {% endif %}
 {% endif %}
 
@@ -151,7 +219,7 @@ streaming:
 skills: {{ HERMES_SKILLS_YAML }}
 {% else %}
 skills:
-  creation_nudge_interval: {{ HERMES_SKILLS_NUDGE_INTERVAL | default('15') | int }}
+  creation_nudge_interval: {{ HERMES_SKILLS_NUDGE_INTERVAL | default('15', true) | int }}
 {% endif %}
 
 # =============================================================================
@@ -161,7 +229,7 @@ skills:
 agent: {{ HERMES_AGENT_YAML }}
 {% else %}
 agent:
-  max_turns: {{ HERMES_MAX_TURNS | default('60') | int }}
+  max_turns: {{ HERMES_MAX_TURNS | default('60', true) | int }}
   verbose: {{ HERMES_AGENT_VERBOSE | default('false') }}
 {% if HERMES_REASONING_EFFORT | default('') %}
   reasoning_effort: "{{ HERMES_REASONING_EFFORT }}"
@@ -174,6 +242,19 @@ agent:
 {% endif %}
 {% if HERMES_GATEWAY_DRAIN_TIMEOUT | default('') %}
   restart_drain_timeout: {{ HERMES_GATEWAY_DRAIN_TIMEOUT | int }}
+{% endif %}
+{% endif %}
+
+# =============================================================================
+# Dangerous Command Approvals
+# =============================================================================
+{% if HERMES_APPROVALS_YAML | default('') %}
+approvals: {{ HERMES_APPROVALS_YAML }}
+{% else %}
+approvals:
+  mode: "{{ HERMES_APPROVALS_MODE | default('off', true) }}"
+{% if HERMES_APPROVALS_TIMEOUT | default('') %}
+  timeout: {{ HERMES_APPROVALS_TIMEOUT | int }}
 {% endif %}
 {% endif %}
 
@@ -210,6 +291,23 @@ stt:
 {% endif %}
 
 # =============================================================================
+# Text-to-Speech
+# =============================================================================
+{% if HERMES_TTS_YAML | default('') %}
+tts: {{ HERMES_TTS_YAML }}
+{% else %}
+tts:
+  enabled: {{ HERMES_TTS_ENABLED | default('true') }}
+{% if ELEVENLABS_API_KEY | default('') %}
+  provider: "elevenlabs"
+{% else %}
+  provider: "{{ HERMES_TTS_PROVIDER | default('microsoft') }}"
+{% endif %}
+  model_overrides:
+    enabled: {{ HERMES_TTS_MODEL_OVERRIDES_ENABLED | default('true') }}
+{% endif %}
+
+# =============================================================================
 # Code Execution Sandbox
 # =============================================================================
 # SECURITY: local code execution runs inside the gateway container (not the SSH
@@ -218,8 +316,8 @@ stt:
 # hard-coded and cannot be overridden via environment variables.
 code_execution:
   enabled: false
-  timeout: {{ HERMES_CODE_EXECUTION_TIMEOUT | default('300') | int }}
-  max_tool_calls: {{ HERMES_CODE_EXECUTION_MAX_TOOL_CALLS | default('50') | int }}
+  timeout: {{ HERMES_CODE_EXECUTION_TIMEOUT | default('300', true) | int }}
+  max_tool_calls: {{ HERMES_CODE_EXECUTION_MAX_TOOL_CALLS | default('50', true) | int }}
 
 # =============================================================================
 # Subagent Delegation
@@ -228,7 +326,7 @@ code_execution:
 delegation: {{ HERMES_DELEGATION_YAML }}
 {% else %}
 delegation:
-  max_iterations: {{ HERMES_DELEGATION_MAX_ITERATIONS | default('50') | int }}
+  max_iterations: {{ HERMES_DELEGATION_MAX_ITERATIONS | default('50', true) | int }}
 {% if HERMES_DELEGATION_MAX_CONCURRENT | default('') %}
   max_concurrent_children: {{ HERMES_DELEGATION_MAX_CONCURRENT | int }}
 {% endif %}
@@ -258,4 +356,161 @@ display:
   show_reasoning: {{ HERMES_DISPLAY_SHOW_REASONING | default('false') }}
   streaming: {{ HERMES_DISPLAY_STREAMING | default('true') }}
   skin: "{{ HERMES_DISPLAY_SKIN | default('default') }}"
+{% endif %}
+
+# =============================================================================
+# File Read Safety
+# =============================================================================
+# Cap how many characters a single read_file call may return.
+# Leave unset to use Hermes built-in default (100 000 chars ≈ 25-35K tokens).
+# Raise for large-context models; lower for small-context models.
+{% if HERMES_FILE_READ_MAX_CHARS | default('') %}
+file_read_max_chars: {{ HERMES_FILE_READ_MAX_CHARS | int }}
+{% endif %}
+
+# =============================================================================
+# Tool Output Truncation
+# =============================================================================
+{% if HERMES_TOOL_OUTPUT_YAML | default('') %}
+tool_output: {{ HERMES_TOOL_OUTPUT_YAML }}
+{% elif HERMES_TOOL_OUTPUT_MAX_BYTES | default('') or HERMES_TOOL_OUTPUT_MAX_LINES | default('') or HERMES_TOOL_OUTPUT_MAX_LINE_LENGTH | default('') %}
+tool_output:
+  max_bytes: {{ HERMES_TOOL_OUTPUT_MAX_BYTES | default('50000', true) | int }}
+  max_lines: {{ HERMES_TOOL_OUTPUT_MAX_LINES | default('2000', true) | int }}
+  max_line_length: {{ HERMES_TOOL_OUTPUT_MAX_LINE_LENGTH | default('2000', true) | int }}
+{% endif %}
+
+# =============================================================================
+# Web Search Backend
+# =============================================================================
+# Auto-selected from available API keys: Firecrawl → Parallel → Tavily → Exa.
+# Override with HERMES_WEB_BACKEND or HERMES_WEB_YAML.
+{% if HERMES_WEB_YAML | default('') %}
+web: {{ HERMES_WEB_YAML }}
+{% elif HERMES_WEB_BACKEND | default('') %}
+web:
+  backend: "{{ HERMES_WEB_BACKEND }}"
+{% elif FIRECRAWL_API_KEY | default('') %}
+web:
+  backend: "firecrawl"
+{% elif PARALLEL_API_KEY | default('') %}
+web:
+  backend: "parallel"
+{% elif TAVILY_API_KEY | default('') %}
+web:
+  backend: "tavily"
+{% elif EXA_API_KEY | default('') %}
+web:
+  backend: "exa"
+{% endif %}
+
+# =============================================================================
+# Browser Automation
+# =============================================================================
+{% if HERMES_BROWSER_YAML | default('') %}
+browser: {{ HERMES_BROWSER_YAML }}
+{% else %}
+browser:
+  inactivity_timeout: {{ HERMES_BROWSER_INACTIVITY_TIMEOUT | default('120', true) | int }}
+{% if HERMES_BROWSER_COMMAND_TIMEOUT | default('') %}
+  command_timeout: {{ HERMES_BROWSER_COMMAND_TIMEOUT | int }}
+{% endif %}
+{% if HERMES_BROWSER_CDP_URL | default('') %}
+  cdp_url: "{{ HERMES_BROWSER_CDP_URL }}"
+{% endif %}
+{% endif %}
+
+# =============================================================================
+# Privacy (PII Redaction)
+# =============================================================================
+# When redact_pii is true the gateway hashes phone numbers, user IDs and
+# chat IDs in the system prompt before sending to the LLM.
+{% if HERMES_PRIVACY_YAML | default('') %}
+privacy: {{ HERMES_PRIVACY_YAML }}
+{% elif HERMES_PRIVACY_REDACT_PII | default('') %}
+privacy:
+  redact_pii: {{ HERMES_PRIVACY_REDACT_PII }}
+{% endif %}
+
+# =============================================================================
+# Voice Mode (CLI)
+# =============================================================================
+{% if HERMES_VOICE_YAML | default('') %}
+voice: {{ HERMES_VOICE_YAML }}
+{% elif HERMES_VOICE_AUTO_TTS | default('') or HERMES_VOICE_MAX_RECORDING_SECONDS | default('') %}
+voice:
+  auto_tts: {{ HERMES_VOICE_AUTO_TTS | default('false') }}
+  max_recording_seconds: {{ HERMES_VOICE_MAX_RECORDING_SECONDS | default('120', true) | int }}
+{% endif %}
+
+# =============================================================================
+# Human Delay (Messaging Platforms)
+# =============================================================================
+# Simulate human-like response pacing: off | natural | custom.
+{% if HERMES_HUMAN_DELAY_YAML | default('') %}
+human_delay: {{ HERMES_HUMAN_DELAY_YAML }}
+{% else %}
+human_delay:
+  mode: "{{ HERMES_HUMAN_DELAY_MODE | default('off', true) }}"
+{% if (HERMES_HUMAN_DELAY_MODE | default('off', true)) != 'off' %}
+  min_ms: {{ HERMES_HUMAN_DELAY_MIN_MS | default('800', true) | int }}
+  max_ms: {{ HERMES_HUMAN_DELAY_MAX_MS | default('2500', true) | int }}
+{% endif %}
+{% endif %}
+
+# =============================================================================
+# Prompt Caching (Anthropic)
+# =============================================================================
+# Two cache TTL tiers supported by Anthropic: "5m" (default) and "1h".
+# Use "1h" for long sessions with pauses between turns.
+{% if HERMES_PROMPT_CACHING_YAML | default('') %}
+prompt_caching: {{ HERMES_PROMPT_CACHING_YAML }}
+{% elif HERMES_PROMPT_CACHING_TTL | default('') %}
+prompt_caching:
+  cache_ttl: "{{ HERMES_PROMPT_CACHING_TTL }}"
+{% endif %}
+
+# =============================================================================
+# OpenRouter Provider Routing
+# =============================================================================
+# Controls how requests are routed across OpenRouter providers.
+# sort: "price" (default) | "throughput" | "latency"
+# Only meaningful when OPENROUTER_API_KEY is set; silently ignored otherwise.
+{% if HERMES_PROVIDER_ROUTING_YAML | default('') %}
+provider_routing: {{ HERMES_PROVIDER_ROUTING_YAML }}
+{% else %}
+provider_routing:
+  sort: "{{ HERMES_PROVIDER_ROUTING_SORT | default('price') }}"
+{% endif %}
+
+# =============================================================================
+# Fallback Model (Quota Handling)
+# =============================================================================
+# When the primary model hits quota/billing limits, automatically switch to
+# the fallback model. OpenRouter will internally rotate between available
+# providers (anthropic → openai → google, etc.) until one succeeds.
+# Turn-scoped: returns to primary model on next user input.
+{% if HERMES_FALLBACK_MODEL_YAML | default('') %}
+fallback_model: {{ HERMES_FALLBACK_MODEL_YAML }}
+{% elif OPENROUTER_API_KEY | default('') %}
+fallback_model:
+  provider: openrouter
+  model: "{{ HERMES_FALLBACK_MODEL | default('anthropic/claude-sonnet-4') }}"
+{% endif %}
+
+# =============================================================================
+# Unauthorized DM Behavior
+# =============================================================================
+# "pair" (default): deny + reply with a one-time pairing code.
+# "ignore": silently drop unauthorized DMs.
+{% if HERMES_UNAUTHORIZED_DM_BEHAVIOR | default('') %}
+unauthorized_dm_behavior: "{{ HERMES_UNAUTHORIZED_DM_BEHAVIOR }}"
+{% endif %}
+
+# =============================================================================
+# Timezone
+# =============================================================================
+# IANA timezone string (e.g. "Europe/Berlin"). Default: server-local time.
+{% if HERMES_TIMEZONE | default('') %}
+timezone: "{{ HERMES_TIMEZONE }}"
 {% endif %}
