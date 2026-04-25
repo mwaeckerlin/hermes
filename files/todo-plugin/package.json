@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "esbuild src/index.jsx --bundle --format=iife --platform=browser --jsx-factory=React.createElement --jsx-fragment=React.Fragment --outdir=dist"
+    "build": "esbuild src/index.jsx --bundle --format=iife --platform=browser --jsx-factory=React.createElement --jsx-fragment=React.Fragment --outdir=dist",
+    "test": "node --test"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"
