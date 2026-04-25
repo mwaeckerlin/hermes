@@ -17,6 +17,15 @@ for secret in /run/secrets/*; do
 done
 
 echo "==== Setting Derived Variables ===="
+# Do not pass empty-string numeric overrides to Hermes. Hermes parses these
+# with int(...), where "" raises ValueError and breaks message handling.
+for _num_var in HERMES_HUMAN_DELAY_MIN_MS HERMES_HUMAN_DELAY_MAX_MS; do
+  eval "_num_val=\${${_num_var}-}"
+  if [ -z "${_num_val}" ]; then
+    unset "${_num_var}"
+  fi
+done
+
 # LiteLLM proxy: exposes an OpenAI-compatible endpoint at LITELLM_BASE_URL.
 # Bridge into the slots Hermes reads when LiteLLM is the chosen provider.
 # Only applied when no higher-priority provider is available.
