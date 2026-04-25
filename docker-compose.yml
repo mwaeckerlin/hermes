@@ -65,6 +65,8 @@ services:
       BROWSERBASE_PROJECT_ID:
       # ElevenLabs TTS
       ELEVENLABS_API_KEY:
+      # Local TODO dashboard plugin storage override (optional)
+      HERMES_TODO_FILE:
       # GitHub (Skills Hub + higher API rate limits)
       GITHUB_TOKEN:
       # Groq (free-tier Whisper STT)
