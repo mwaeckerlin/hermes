@@ -12,11 +12,14 @@ const STATUS_LABELS = {
   open: "Open",
   in_progress: "In Progress",
   done: "Done",
+  accepted: "Accepted",
   cancelled: "Cancelled",
 };
 
+const STATUS_ORDER = ["open", "in_progress", "done", "accepted", "cancelled"];
+
 function TodoPage() {
-  const [data, setData] = useState({ items: [], statuses: [] });
+  const [data, setData] = useState({ items: [], statuses: STATUS_ORDER });
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [progressNotes, setProgressNotes] = useState({});
@@ -27,7 +30,7 @@ function TodoPage() {
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    fetchJSON("/api/plugins/todo/list")
+    return fetchJSON("/api/plugins/todo/list")
       .then((payload) => setData(payload))
       .catch((e) => setError(readError(e)))
       .finally(() => setLoading(false));
@@ -37,6 +40,23 @@ function TodoPage() {
     load();
   }, [load]);
 
+  const upsertItem = useCallback((item) => {
+    if (!item) return;
+    setData((current) => {
+      const items = current?.items || [];
+      const index = items.findIndex((entry) => entry.id === item.id);
+      const nextItems = index === -1 ? [...items, item] : items.map((entry) => (entry.id === item.id ? item : entry));
+      return { ...(current || {}), items: nextItems };
+    });
+  }, []);
+
+  const removeItem = useCallback((id) => {
+    setData((current) => ({
+      ...(current || {}),
+      items: (current?.items || []).filter((item) => item.id !== id),
+    }));
+  }, []);
+
   const addTodo = useCallback(() => {
     setBusy(true);
     setError(null);
@@ -45,45 +65,33 @@ function TodoPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title, notes }),
     })
-      .then(() => {
+      .then((payload) => {
+        upsertItem(payload.item);
         setTitle("");
         setNotes("");
-        load();
       })
       .catch((e) => setError(readError(e)))
       .finally(() => setBusy(false));
-  }, [title, notes, load]);
+  }, [title, notes, upsertItem]);
 
   const updateTodo = useCallback(
     (id, patch) => {
       setBusy(true);
       setError(null);
-      fetchJSON(`/api/plugins/todo/update/${id}`, {
+      return fetchJSON(`/api/plugins/todo/update/${id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(patch),
       })
-        .then(() => load())
+        .then((payload) => upsertItem(payload.item))
         .catch((e) => setError(readError(e)))
         .finally(() => setBusy(false));
     },
-    [load]
+    [upsertItem]
   );
 
-  const claimNext = useCallback(() => {
-    setBusy(true);
-    setError(null);
-    fetchJSON("/api/plugins/todo/claim-next", { method: "POST" })
-      .then((r) => {
-        if (!r.ok) setError("No open TODO item to claim.");
-        load();
-      })
-      .catch((e) => setError(readError(e)))
-      .finally(() => setBusy(false));
-  }, [load]);
-
   const postAction = useCallback(
-    (path, body = {}) => {
+    (path, body = {}, options = {}) => {
       setBusy(true);
       setError(null);
       return fetchJSON(path, {
@@ -91,30 +99,28 @@ function TodoPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       })
-        .then(() => load())
+        .then((payload) => {
+          if (options.removeId) removeItem(options.removeId);
+          else upsertItem(payload.item);
+        })
         .catch((e) => setError(readError(e)))
         .finally(() => setBusy(false));
     },
-    [load]
+    [removeItem, upsertItem]
   );
 
-  const deleteTodo = useCallback((id) => postAction("/api/plugins/todo/delete", { id }), [postAction]);
+  const deleteTodo = useCallback((id) => postAction("/api/plugins/todo/delete", { id }, { removeId: id }), [postAction]);
   const cancelTodo = useCallback((id, comment) => postAction(`/api/plugins/todo/cancel/${id}`, { progress_note: comment }), [postAction]);
   const rejectTodo = useCallback((id, comment) => postAction(`/api/plugins/todo/reject/${id}`, { progress_note: comment }), [postAction]);
+  const acceptTodo = useCallback((id, comment) => postAction(`/api/plugins/todo/accept/${id}`, { progress_note: comment }), [postAction]);
 
   const items = data?.items ?? [];
-  const grouped = {
-    open: items.filter((item) => item.status === "open"),
-    in_progress: items.filter((item) => item.status === "in_progress"),
-    done: items.filter((item) => item.status === "done"),
-    cancelled: items.filter((item) => item.status === "cancelled"),
-  };
+  const grouped = Object.fromEntries(STATUS_ORDER.map((status) => [status, items.filter((item) => item.status === status)]));
 
   return (
     <div style={{ padding: "1.5rem", maxWidth: "980px" }}>
       <div style={{ display: "flex", gap: "1rem", alignItems: "center", marginBottom: "1rem" }}>
         <h2 style={{ fontSize: "1.25rem", fontWeight: "bold", flex: 1 }}>Local TODO</h2>
-        <Button size="sm" variant="outline" onClick={claimNext} disabled={busy}>Claim next</Button>
         <Button size="sm" onClick={load} disabled={loading}>{loading ? "Loading…" : "Refresh"}</Button>
       </div>
 
@@ -131,15 +137,16 @@ function TodoPage() {
 
       <div style={{ height: "1rem" }} />
 
-      {Object.keys(grouped).map((status) => (
+      {STATUS_ORDER.map((status) => (
         <TodoColumn
           key={status}
           status={status}
-          items={grouped[status]}
+          items={grouped[status] || []}
           updateTodo={updateTodo}
           deleteTodo={deleteTodo}
           cancelTodo={cancelTodo}
           rejectTodo={rejectTodo}
+          acceptTodo={acceptTodo}
           progressNotes={progressNotes}
           setProgressNotes={setProgressNotes}
           disabled={busy}
@@ -149,7 +156,7 @@ function TodoPage() {
   );
 }
 
-function TodoColumn({ status, items, updateTodo, deleteTodo, cancelTodo, rejectTodo, progressNotes, setProgressNotes, disabled }) {
+function TodoColumn({ status, items, updateTodo, deleteTodo, cancelTodo, rejectTodo, acceptTodo, progressNotes, setProgressNotes, disabled }) {
   return (
     <Card style={{ marginBottom: "1rem" }}>
       <CardHeader>
@@ -160,37 +167,18 @@ function TodoColumn({ status, items, updateTodo, deleteTodo, cancelTodo, rejectT
           <p style={{ fontSize: "0.875rem", opacity: 0.6 }}>No items.</p>
         ) : (
           items.map((item) => (
-            <div key={item.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", padding: "0.75rem 0" }}>
-              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-                <Badge>{item.id}</Badge>
-                <strong style={{ flex: 1 }}>{item.title}</strong>
-                <StatusButtons item={item} updateTodo={updateTodo} disabled={disabled} />
-                <Button size="sm" variant="outline" onClick={() => cancelTodo(item.id, progressNotes[item.id] || "Cancelled by user")} disabled={disabled || item.status === "cancelled"}>Cancel</Button>
-                {item.status === "done" && <Button size="sm" variant="outline" onClick={() => rejectTodo(item.id, progressNotes[item.id] || "Rejected by user")} disabled={disabled}>Reject</Button>}
-                <Button size="sm" variant="outline" onClick={() => deleteTodo(item.id)} disabled={disabled}>Delete</Button>
-              </div>
-              {item.notes && <p style={{ margin: "0.5rem 0", opacity: 0.75 }}>{item.notes}</p>}
-              {(item.progress || []).length > 0 && (
-                <ul style={{ margin: "0.5rem 0", paddingLeft: "1.25rem", fontSize: "0.875rem", opacity: 0.75 }}>
-                  {item.progress.map((entry, idx) => <li key={`${item.id}-${idx}`}>{entry.at}: {entry.note}</li>)}
-                </ul>
-              )}
-              <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
-                <Input
-                  value={progressNotes[item.id] || ""}
-                  placeholder="Progress note"
-                  onChange={(e) => setProgressNotes((notes) => ({ ...notes, [item.id]: e.target.value }))}
-                />
-                <Button
-                  size="sm"
-                  disabled={disabled || !(progressNotes[item.id] || "").trim()}
-                  onClick={() => {
-                    updateTodo(item.id, { progress_note: progressNotes[item.id] || "" });
-                    setProgressNotes((notes) => ({ ...notes, [item.id]: "" }));
-                  }}
-                >Add note</Button>
-              </div>
-            </div>
+            <TodoItem
+              key={item.id}
+              item={item}
+              updateTodo={updateTodo}
+              deleteTodo={deleteTodo}
+              cancelTodo={cancelTodo}
+              rejectTodo={rejectTodo}
+              acceptTodo={acceptTodo}
+              progressNotes={progressNotes}
+              setProgressNotes={setProgressNotes}
+              disabled={disabled}
+            />
           ))
         )}
       </CardContent>
@@ -198,18 +186,46 @@ function TodoColumn({ status, items, updateTodo, deleteTodo, cancelTodo, rejectT
   );
 }
 
-function StatusButtons({ item, updateTodo, disabled }) {
-  return ["open", "in_progress", "done", "cancelled"].map((status) => (
-    <Button
-      key={status}
-      size="sm"
-      variant={item.status === status ? "default" : "outline"}
-      disabled={disabled || item.status === status}
-      onClick={() => updateTodo(item.id, { status })}
-    >
-      {STATUS_LABELS[status]}
-    </Button>
-  ));
+function TodoItem({ item, updateTodo, deleteTodo, cancelTodo, rejectTodo, acceptTodo, progressNotes, setProgressNotes, disabled }) {
+  const note = progressNotes[item.id] || "";
+  const clearNote = () => setProgressNotes((notes) => ({ ...notes, [item.id]: "" }));
+  const canCancel = item.status !== "cancelled" && item.status !== "accepted";
+  const canDelete = item.status === "cancelled" || item.status === "accepted";
+
+  return (
+    <div style={{ borderBottom: "1px solid rgba(255,255,255,0.08)", padding: "0.75rem 0" }}>
+      <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+        <Badge>{item.id}</Badge>
+        <Badge>{STATUS_LABELS[item.status] || item.status}</Badge>
+        <strong style={{ flex: 1 }}>{item.title}</strong>
+        {canCancel && <Button size="sm" variant="outline" onClick={() => cancelTodo(item.id, note || "Cancelled by user")} disabled={disabled}>Cancel</Button>}
+        {item.status === "done" && <Button size="sm" variant="outline" onClick={() => rejectTodo(item.id, note || "Rejected by user")} disabled={disabled}>Reject</Button>}
+        {item.status === "done" && <Button size="sm" variant="outline" onClick={() => acceptTodo(item.id, note || "Accepted by user")} disabled={disabled}>Accept</Button>}
+        {canDelete && <Button size="sm" variant="outline" onClick={() => deleteTodo(item.id)} disabled={disabled}>Delete</Button>}
+      </div>
+      {item.notes && <p style={{ margin: "0.5rem 0", opacity: 0.75 }}>{item.notes}</p>}
+      {(item.progress || []).length > 0 && (
+        <ul style={{ margin: "0.5rem 0", paddingLeft: "1.25rem", fontSize: "0.875rem", opacity: 0.75 }}>
+          {item.progress.map((entry, idx) => <li key={`${item.id}-${idx}`}>{entry.at}: {entry.note}</li>)}
+        </ul>
+      )}
+      <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem" }}>
+        <Input
+          value={note}
+          placeholder="Progress note"
+          onChange={(e) => setProgressNotes((notes) => ({ ...notes, [item.id]: e.target.value }))}
+        />
+        <Button
+          size="sm"
+          disabled={disabled || !note.trim()}
+          onClick={() => {
+            updateTodo(item.id, { progress_note: note });
+            clearNote();
+          }}
+        >Add note</Button>
+      </div>
+    </div>
+  );
 }
 
 function readError(error) {
