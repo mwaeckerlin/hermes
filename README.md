@@ -296,6 +296,20 @@ users, open the **Dashboard → Pairing** tab at `http://localhost:9119/pairing`
 The Pairing tab lists all pending codes with one-click **Approve** buttons, and
 shows all approved users with **Revoke** buttons. No CLI required.
 
+### Command Approvals
+
+This deployment executes agent commands inside the isolated SSH sandbox. The
+sandbox has no gateway secrets, no LLM tokens, and no direct host filesystem
+access, so command approval prompts are disabled by default:
+
+```yaml
+approvals:
+  mode: off
+```
+
+Use `HERMES_APPROVALS_MODE=manual` or `HERMES_APPROVALS_MODE=smart` if you run a
+different deployment where terminal commands can affect trusted systems.
+
 ### Tool API Keys
 
 | Variable | Description |
@@ -529,13 +543,14 @@ HERMES_PLATFORM_TOOLSETS_YAML='{"telegram":["web","terminal","file","skills","to
 ### Config Persistence
 
 `config.yaml` is stored in the `hermes-data` Docker volume (`/opt/data`).
-On first start it is rendered from the template. On subsequent starts the
-existing file is preserved unless `OVERWRITE_CONFIG` is set.
+On startup it is rendered from the template and written to the volume by default.
+This keeps template defaults such as disabled command approvals in sync with the
+container image.
 
-To force a re-render without losing the volume:
+To preserve manual edits in the volume:
 
 ```bash
-OVERWRITE_CONFIG=true npm start
+OVERWRITE_CONFIG=false npm start
 ```
 
 To edit `config.yaml` directly (advanced):
