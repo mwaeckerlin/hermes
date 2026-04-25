@@ -17,6 +17,7 @@ const STATUS_LABELS = {
 };
 
 const STATUS_ORDER = ["open", "in_progress", "done", "accepted", "cancelled"];
+const TODO_REFRESH_INTERVAL_MS = 5000;
 
 function TodoPage() {
   const [data, setData] = useState({ items: [], statuses: STATUS_ORDER });
@@ -38,6 +39,8 @@ function TodoPage() {
 
   useEffect(() => {
     load();
+    const timer = setInterval(load, TODO_REFRESH_INTERVAL_MS);
+    return () => clearInterval(timer);
   }, [load]);
 
   const upsertItem = useCallback((item) => {

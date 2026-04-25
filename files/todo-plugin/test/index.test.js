@@ -97,3 +97,11 @@ test("mutations update local state without requiring manual reload", () => {
   assert.ok(source.includes("removeItem(options.removeId)"));
   assert.ok(!source.includes(".then(() => load())"));
 });
+
+test("polls the TODO API for browser auto-refresh", () => {
+  const source = readSource();
+
+  assert.ok(source.includes("setInterval"));
+  assert.ok(source.includes("TODO_REFRESH_INTERVAL_MS"));
+  assert.ok(source.includes("clearInterval"));
+});
