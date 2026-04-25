@@ -308,6 +308,21 @@ tts:
 {% endif %}
 
 # =============================================================================
+# Image Generation
+# =============================================================================
+{% if HERMES_IMAGE_GEN_YAML | default('') %}
+image_gen: {{ HERMES_IMAGE_GEN_YAML }}
+{% elif HERMES_IMAGE_GEN_USE_GATEWAY | default('') or HERMES_IMAGE_GEN_MODEL | default('') %}
+image_gen:
+{% if HERMES_IMAGE_GEN_MODEL | default('') %}
+  model: "{{ HERMES_IMAGE_GEN_MODEL }}"
+{% endif %}
+{% if HERMES_IMAGE_GEN_USE_GATEWAY | default('') %}
+  use_gateway: {{ HERMES_IMAGE_GEN_USE_GATEWAY }}
+{% endif %}
+{% endif %}
+
+# =============================================================================
 # Code Execution Sandbox
 # =============================================================================
 # SECURITY: local code execution runs inside the gateway container (not the SSH

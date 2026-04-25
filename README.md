@@ -313,10 +313,41 @@ different deployment where terminal commands can affect trusted systems.
 | `PARALLEL_API_KEY` | Parallel web extract |
 | `TAVILY_API_KEY` | Tavily web search / extract |
 | `FAL_KEY` | fal.ai image generation |
+| `TOOL_GATEWAY_DOMAIN` | Custom/Nous Tool Gateway base domain (optional) |
+| `TOOL_GATEWAY_SCHEME` | Tool Gateway scheme, `https` by default upstream |
+| `TOOL_GATEWAY_USER_TOKEN` | Tool Gateway auth token for custom/self-hosted deployments |
+| `FIRECRAWL_GATEWAY_URL` | Firecrawl gateway endpoint override |
+| `NOUS_BASE_URL`, `NOUS_INFERENCE_BASE_URL`, `HERMES_PORTAL_BASE_URL` | Nous Portal/inference endpoint overrides |
 | `BROWSERBASE_API_KEY` | Browserbase cloud browser automation |
 | `BROWSERBASE_PROJECT_ID` | Browserbase project ID |
 | `ELEVENLABS_API_KEY` | ElevenLabs premium TTS |
 | `GITHUB_TOKEN` | GitHub token (Skills Hub + higher rate limits) |
+
+### Image Generation Configuration
+
+Direct fal.ai usage:
+
+```env
+FAL_KEY=...
+HERMES_IMAGE_GEN_MODEL=fal-ai/gpt-image-2
+HERMES_IMAGE_GEN_USE_GATEWAY=false
+```
+
+Nous Tool Gateway / custom gateway usage:
+
+```env
+HERMES_IMAGE_GEN_USE_GATEWAY=true
+HERMES_IMAGE_GEN_MODEL=fal-ai/gpt-image-2
+TOOL_GATEWAY_DOMAIN=nousresearch.com
+TOOL_GATEWAY_SCHEME=https
+TOOL_GATEWAY_USER_TOKEN=...
+```
+
+For complete control, override the rendered section directly:
+
+```env
+HERMES_IMAGE_GEN_YAML={"use_gateway":true,"model":"fal-ai/gpt-image-2"}
+```
 
 ### Text-to-Speech Configuration
 
