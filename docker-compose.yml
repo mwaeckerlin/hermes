@@ -194,6 +194,7 @@ services:
       hermes-gateway:
         condition: service_started
     environment:
+      HERMES_HOME: /opt/data
       GATEWAY_HEALTH_URL: http://hermes-gateway:8642
     volumes:
       - hermes-data:/opt/data

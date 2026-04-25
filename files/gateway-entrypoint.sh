@@ -2,11 +2,23 @@
 
 HERMES_HOME="${HERMES_HOME:-/opt/data}"
 
+mask_set() {
+  _name="$1"
+  eval "_value=\${${_name}:-}"
+  if [ -n "$_value" ]; then
+    echo "  - $_name: set"
+  else
+    echo "  - $_name: unset"
+  fi
+}
+
 echo "==== Reading Docker Secrets ===="
 _ssh_key_from_secret=false
+_secret_names=""
 for secret in /run/secrets/*; do
   test -e "$secret" || continue
   varname=$(basename "$secret" | tr '[:lower:]-' '[:upper:]_')
+  _secret_names="${_secret_names:+$_secret_names, }$varname"
   if [ "$varname" = "HERMES_SANDBOX_SSH_PRIVATE_KEY" ]; then
     echo "Setting SSH private key from secret"
     _ssh_key_from_secret=true
@@ -15,22 +27,23 @@ for secret in /run/secrets/*; do
   fi
   export "$varname=$(sed -z 's/\n/\\n/g' "$secret")"
 done
+if [ -n "$_secret_names" ]; then
+  echo "Secrets loaded: $_secret_names"
+else
+  echo "Secrets loaded: none"
+fi
 
 echo "==== Setting Derived Variables ===="
-# LiteLLM proxy: exposes an OpenAI-compatible endpoint at LITELLM_BASE_URL.
-# Bridge into the slots Hermes reads when LiteLLM is the chosen provider.
-# Only applied when no higher-priority provider is available.
-if [ -n "$LITELLM_BASE_URL" ]; then
-  if [ -z "$OPENROUTER_API_KEY" ] && [ -z "$ANTHROPIC_API_KEY" ] && \
-     [ -z "$GOOGLE_API_KEY" ] && [ -z "$GEMINI_API_KEY" ] && [ -z "$OPENAI_API_KEY" ]; then
-    export HERMES_MODEL_BASE_URL="${HERMES_MODEL_BASE_URL:-$LITELLM_BASE_URL}"
-    # LiteLLM uses the OpenAI wire protocol; supply the key via OPENAI_API_KEY.
-    if [ -n "$LITELLM_API_KEY" ]; then
-      export OPENAI_API_KEY="${LITELLM_API_KEY}"
-    fi
-    echo "LiteLLM provider configured: $LITELLM_BASE_URL"
-  fi
-fi
+echo "HERMES_HOME=$HERMES_HOME"
+echo "Configured secret-bearing env vars:"
+for _var in \
+  OPENROUTER_API_KEY ANTHROPIC_API_KEY OPENAI_API_KEY GOOGLE_API_KEY GEMINI_API_KEY \
+  LITELLM_API_KEY TELEGRAM_BOT_TOKEN DISCORD_BOT_TOKEN SLACK_BOT_TOKEN SLACK_APP_TOKEN \
+  VOICE_TOOLS_OPENAI_KEY GROQ_API_KEY EXA_API_KEY FIRECRAWL_API_KEY PARALLEL_API_KEY \
+  TAVILY_API_KEY FAL_KEY BROWSERBASE_API_KEY ELEVENLABS_API_KEY GITHUB_TOKEN \
+  HERMES_SANDBOX_SSH_PRIVATE_KEY; do
+  mask_set "$_var"
+done
 
 # Require at least one LLM provider to be configured.
 if [ -z "$OPENROUTER_API_KEY" ] && [ -z "$ANTHROPIC_API_KEY" ] && \
@@ -53,46 +66,13 @@ echo "==== Configured LLM Providers ===="
 [ -n "$OPENAI_API_KEY" ]                               && echo "  - OpenAI"
 { [ -n "$GOOGLE_API_KEY" ] || [ -n "$GEMINI_API_KEY" ]; } && echo "  - Google Gemini"
 [ -n "$LITELLM_BASE_URL" ]                             && echo "  - LiteLLM ($LITELLM_BASE_URL)"
+echo "LLM selection priority: OpenAI -> OpenRouter -> Anthropic -> Google -> LiteLLM"
 
 # Whisper/TTS: VOICE_TOOLS_OPENAI_KEY is Hermes's real env var for voice features.
 # Fall back to OPENAI_API_KEY if not set separately.
 if [ -z "$VOICE_TOOLS_OPENAI_KEY" ] && [ -n "$OPENAI_API_KEY" ]; then
   export VOICE_TOOLS_OPENAI_KEY="$OPENAI_API_KEY"
   echo "VOICE_TOOLS_OPENAI_KEY set from OPENAI_API_KEY"
-fi
-
-# Auto-select default model based on available API keys (overridable via HERMES_DEFAULT_MODEL).
-# All providers are optional; multiple can be active simultaneously — the priority
-# order below only determines which model is used by default.
-if [ -z "$HERMES_DEFAULT_MODEL" ]; then
-  if [ -n "$OPENROUTER_API_KEY" ]; then
-    # Model ID for OpenRouter: use the bare OpenRouter slug (e.g. anthropic/claude-opus-4-5)
-    # WITHOUT any "openrouter/" routing prefix.  Hermes passes the model string
-    # directly to https://openrouter.ai/api/v1, so the prefix must not appear in
-    # the actual HTTP request body — OpenRouter rejects "openrouter/..." IDs.
-    export HERMES_DEFAULT_MODEL="anthropic/claude-opus-4-5"
-  elif [ -n "$ANTHROPIC_API_KEY" ]; then
-    export HERMES_DEFAULT_MODEL="anthropic/claude-opus-4.6"
-  elif [ -n "$GOOGLE_API_KEY" ] || [ -n "$GEMINI_API_KEY" ]; then
-    export HERMES_DEFAULT_MODEL="gemini/gemini-2.5-pro"
-  elif [ -n "$OPENAI_API_KEY" ]; then
-    # Hermes's "auto" provider only tries OpenRouter → Nous → Codex and will
-    # never reach OPENAI_API_KEY.  Use provider=custom with the OpenAI base URL
-    # so requests go directly to api.openai.com (OPENAI_API_KEY is picked up
-    # automatically by the custom endpoint auth chain).
-    # Use o4-mini (not gpt-4o): Hermes always enables reasoning on the Responses
-    # API transport with include=["reasoning.encrypted_content"], which gpt-4o
-    # rejects (HTTP 400).  o4-mini fully supports the Responses API + encrypted
-    # reasoning and is cost-effective for general assistant use.
-    export HERMES_DEFAULT_MODEL="o4-mini"
-    export HERMES_MODEL_PROVIDER="${HERMES_MODEL_PROVIDER:-custom}"
-    export HERMES_MODEL_BASE_URL="${HERMES_MODEL_BASE_URL:-https://api.openai.com/v1}"
-  elif [ -n "$LITELLM_BASE_URL" ]; then
-    export HERMES_DEFAULT_MODEL="${LITELLM_DEFAULT_MODEL:-gpt-4o}"
-  fi
-  if [ -n "$HERMES_DEFAULT_MODEL" ]; then
-    echo "HERMES_DEFAULT_MODEL auto-selected: $HERMES_DEFAULT_MODEL"
-  fi
 fi
 
 echo "==== Setting Up SSH Key for Sandbox ===="
@@ -128,6 +108,80 @@ echo "==== Rendering Jinja2 Configuration ===="
 /opt/hermes/.venv/bin/python3 /render-config.py \
   /config.yaml.j2.default \
   "${HERMES_HOME}/config.yaml.rendered"
+echo "Configuration rendered to ${HERMES_HOME}/config.yaml.rendered"
+
+echo "==== Rendered Hermes Configuration Summary ===="
+/opt/hermes/.venv/bin/python3 - <<'PY' "${HERMES_HOME}/config.yaml.rendered"
+import sys
+import yaml
+
+path = sys.argv[1]
+with open(path) as fh:
+    cfg = yaml.safe_load(fh) or {}
+
+def get(mapping, *path, default=None):
+    cur = mapping
+    for key in path:
+        if not isinstance(cur, dict) or key not in cur:
+            return default
+        cur = cur[key]
+    return cur
+
+model = get(cfg, "model", default={}) or {}
+terminal = get(cfg, "terminal", default={}) or {}
+approvals = get(cfg, "approvals", default={}) or {}
+streaming = get(cfg, "streaming", default={}) or {}
+tts = get(cfg, "tts", default={}) or {}
+stt = get(cfg, "stt", default={}) or {}
+auxiliary = get(cfg, "auxiliary", default={}) or {}
+vision = auxiliary.get("vision", {}) if isinstance(auxiliary, dict) else {}
+compression = auxiliary.get("compression", {}) if isinstance(auxiliary, dict) else {}
+web_extract = auxiliary.get("web_extract", {}) if isinstance(auxiliary, dict) else {}
+web = get(cfg, "web", default={}) or {}
+browser = get(cfg, "browser", default={}) or {}
+display = get(cfg, "display", default={}) or {}
+human_delay = get(cfg, "human_delay", default={}) or {}
+delegation = get(cfg, "delegation", default={}) or {}
+
+print(f"  model.default: {model.get('default', '(unset)')}")
+print(f"  model.provider: {model.get('provider', '(unset)')}")
+if model.get("base_url"):
+    print(f"  model.base_url: {model['base_url']}")
+if model.get("max_tokens") is not None:
+    print(f"  model.max_tokens: {model['max_tokens']}")
+print(f"  terminal.backend: {terminal.get('backend', '(unset)')}")
+print(f"  terminal.ssh_target: {terminal.get('ssh_user', '(unset)')}@{terminal.get('ssh_host', '(unset)')}:{terminal.get('ssh_port', '(unset)')}")
+print(f"  terminal.timeout: {terminal.get('timeout', '(unset)')}")
+print(f"  approvals.mode: {approvals.get('mode', '(unset)')}")
+print(f"  streaming.enabled: {streaming.get('enabled', '(unset)')}")
+print(f"  tts.enabled: {tts.get('enabled', '(unset)')}")
+print(f"  tts.provider: {tts.get('provider', '(unset)')}")
+print(f"  stt.enabled: {stt.get('enabled', '(unset)')}")
+if isinstance(stt.get("local"), dict):
+    print(f"  stt.local.model: {stt['local'].get('model', '(unset)')}")
+print(f"  auxiliary.compression.provider: {compression.get('provider', compression.get('base_url', '(unset)'))}")
+print(f"  auxiliary.compression.model: {compression.get('model', '(unset)')}")
+print(f"  auxiliary.vision.provider: {vision.get('provider', vision.get('base_url', '(unset)'))}")
+print(f"  auxiliary.vision.model: {vision.get('model', '(unset)')}")
+print(f"  auxiliary.web_extract.provider: {web_extract.get('provider', '(unset)')}")
+if web:
+    print(f"  web.backend: {web.get('backend', '(unset)')}")
+if browser:
+    print(f"  browser.inactivity_timeout: {browser.get('inactivity_timeout', '(unset)')}")
+print(f"  display.tool_progress: {display.get('tool_progress', '(unset)')}")
+print(f"  human_delay.mode: {human_delay.get('mode', '(unset)')}")
+print(f"  delegation.max_iterations: {delegation.get('max_iterations', '(unset)')}")
+PY
+
+# LiteLLM uses the OpenAI wire protocol. The config template selects the
+# LiteLLM base_url; this runtime bridge supplies the API key to Hermes's
+# OpenAI-compatible transport without affecting rendered provider selection.
+if [ -n "$LITELLM_BASE_URL" ] && [ -n "$LITELLM_API_KEY" ] && \
+   [ -z "$OPENROUTER_API_KEY" ] && [ -z "$ANTHROPIC_API_KEY" ] && \
+   [ -z "$GOOGLE_API_KEY" ] && [ -z "$GEMINI_API_KEY" ] && [ -z "$OPENAI_API_KEY" ]; then
+  export OPENAI_API_KEY="${LITELLM_API_KEY}"
+  echo "LiteLLM API key bridged for OpenAI-compatible transport"
+fi
 
 echo "==== Configuring Hermes ===="
 # Copy the freshly rendered config to config.yaml when:
@@ -141,6 +195,7 @@ if [ "$_overwrite_config" = "true" ] || [ "$_overwrite_config" = "1" ] || [ "$_o
 else
   echo "config.yaml preserved (OVERWRITE_CONFIG=false)"
 fi
+echo "Active config file: ${HERMES_HOME}/config.yaml"
 
 echo "==== Redirecting PID and Lock Files to /tmp ===="
 # gateway.pid and gateway.lock must not live in the persistent volume — stale

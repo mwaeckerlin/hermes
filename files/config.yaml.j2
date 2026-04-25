@@ -16,11 +16,51 @@
 model: {{ HERMES_MODEL_YAML }}
 {% else %}
 model:
-  # Set HERMES_DEFAULT_MODEL env var to override; entrypoint auto-selects from available API keys.
-  default: "{{ HERMES_DEFAULT_MODEL | default('anthropic/claude-opus-4-5') }}"
-  provider: "{{ HERMES_MODEL_PROVIDER | default('auto') }}"
+  # Set HERMES_DEFAULT_MODEL env var to override; otherwise auto-select from available API keys.
+  # Priority: LiteLLM → OpenRouter → OpenAI → Anthropic → Google
+{% if HERMES_DEFAULT_MODEL | default('') %}
+  default: "{{ HERMES_DEFAULT_MODEL }}"
+{% elif LITELLM_BASE_URL | default('') %}
+  default: "{{ LITELLM_DEFAULT_MODEL | default('gpt-4o') }}"
+{% elif OPENROUTER_API_KEY | default('') %}
+  default: "openai/gpt-5.5"
+{% elif OPENAI_API_KEY | default('') %}
+  default: "gpt-5.5"
+{% elif ANTHROPIC_API_KEY | default('') %}
+  default: "anthropic/claude-opus-4.6"
+{% elif GOOGLE_API_KEY | default('') or GEMINI_API_KEY | default('') %}
+  default: "gemini/gemini-2.5-pro"
+{% else %}
+  default: "openai/gpt-5.5"
+{% endif %}
+  # Provider routing:
+  # - "custom": use custom base_url (LiteLLM)
+  # - "auto": Hermes knows the standard endpoints for this provider
+{% if HERMES_MODEL_PROVIDER | default('') %}
+  provider: "{{ HERMES_MODEL_PROVIDER }}"
+{% elif LITELLM_BASE_URL | default('') %}
+  provider: "custom"
+{% elif OPENROUTER_API_KEY | default('') %}
+  provider: "auto"
+{% elif OPENAI_API_KEY | default('') %}
+  provider: "auto"
+{% elif ANTHROPIC_API_KEY | default('') %}
+  provider: "auto"
+{% elif GOOGLE_API_KEY | default('') or GEMINI_API_KEY | default('') %}
+  provider: "auto"
+{% else %}
+  provider: "auto"
+{% endif %}
+  # Base URL configuration:
+  # - Explicitly set for custom endpoints (LiteLLM)
+  # - OpenAI, Anthropic, Google: Hermes knows the standard endpoints
+  # - OpenRouter: Hermes knows the standard endpoint
 {% if HERMES_MODEL_BASE_URL | default('') %}
   base_url: "{{ HERMES_MODEL_BASE_URL }}"
+{% elif LITELLM_BASE_URL | default('') %}
+  base_url: "{{ LITELLM_BASE_URL }}"
+{% elif OPENAI_API_KEY | default('') and not (LITELLM_BASE_URL | default('') or OPENROUTER_API_KEY | default('') or ANTHROPIC_API_KEY | default('') or GOOGLE_API_KEY | default('') or GEMINI_API_KEY | default('')) %}
+  base_url: "https://api.openai.com/v1"
 {% endif %}
 {% if HERMES_MODEL_MAX_TOKENS | default('') %}
   max_tokens: {{ HERMES_MODEL_MAX_TOKENS | int }}
@@ -438,9 +478,24 @@ prompt_caching:
 # Only meaningful when OPENROUTER_API_KEY is set; silently ignored otherwise.
 {% if HERMES_PROVIDER_ROUTING_YAML | default('') %}
 provider_routing: {{ HERMES_PROVIDER_ROUTING_YAML }}
-{% elif HERMES_PROVIDER_ROUTING_SORT | default('') %}
+{% else %}
 provider_routing:
-  sort: "{{ HERMES_PROVIDER_ROUTING_SORT }}"
+  sort: "{{ HERMES_PROVIDER_ROUTING_SORT | default('price') }}"
+{% endif %}
+
+# =============================================================================
+# Fallback Model (Quota Handling)
+# =============================================================================
+# When the primary model hits quota/billing limits, automatically switch to
+# the fallback model. OpenRouter will internally rotate between available
+# providers (anthropic → openai → google, etc.) until one succeeds.
+# Turn-scoped: returns to primary model on next user input.
+{% if HERMES_FALLBACK_MODEL_YAML | default('') %}
+fallback_model: {{ HERMES_FALLBACK_MODEL_YAML }}
+{% elif OPENROUTER_API_KEY | default('') %}
+fallback_model:
+  provider: openrouter
+  model: "{{ HERMES_FALLBACK_MODEL | default('anthropic/claude-sonnet-4') }}"
 {% endif %}
 
 # =============================================================================

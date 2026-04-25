@@ -11,7 +11,7 @@ import os
 import sys
 
 try:
-    from jinja2 import Environment, BaseLoader, Undefined
+    from jinja2 import Environment, BaseLoader, StrictUndefined
 except ImportError:
     print("ERROR: jinja2 not found. Run using /opt/hermes/.venv/bin/python3", file=sys.stderr)
     sys.exit(1)
@@ -30,7 +30,7 @@ env = Environment(
     loader=BaseLoader(),
     autoescape=False,
     keep_trailing_newline=True,
-    undefined=Undefined,
+    undefined=StrictUndefined,
 )
 
 template = env.from_string(template_str)
