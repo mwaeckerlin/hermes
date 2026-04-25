@@ -17,15 +17,6 @@ for secret in /run/secrets/*; do
 done
 
 echo "==== Setting Derived Variables ===="
-# Do not pass empty-string numeric overrides to Hermes. Hermes parses these
-# with int(...), where "" raises ValueError and breaks message handling.
-for _num_var in HERMES_HUMAN_DELAY_MIN_MS HERMES_HUMAN_DELAY_MAX_MS; do
-  eval "_num_val=\${${_num_var}-}"
-  if [ -z "${_num_val}" ]; then
-    unset "${_num_var}"
-  fi
-done
-
 # LiteLLM proxy: exposes an OpenAI-compatible endpoint at LITELLM_BASE_URL.
 # Bridge into the slots Hermes reads when LiteLLM is the chosen provider.
 # Only applied when no higher-priority provider is available.
@@ -140,14 +131,15 @@ echo "==== Rendering Jinja2 Configuration ===="
 
 echo "==== Configuring Hermes ===="
 # Copy the freshly rendered config to config.yaml when:
-#   - OVERWRITE_CONFIG is set (admin-forced refresh), or
+#   - OVERWRITE_CONFIG is true/unset (default refresh), or
 #   - config.yaml does not exist yet (first start).
-# Leave the file untouched on subsequent starts to preserve user edits.
-if [ -n "${OVERWRITE_CONFIG:-}" ] || [ ! -e "${HERMES_HOME}/config.yaml" ]; then
+# Set OVERWRITE_CONFIG=false to preserve manual edits in the persistent volume.
+_overwrite_config="${OVERWRITE_CONFIG:-true}"
+if [ "$_overwrite_config" = "true" ] || [ "$_overwrite_config" = "1" ] || [ "$_overwrite_config" = "yes" ] || [ "$_overwrite_config" = "on" ] || [ ! -e "${HERMES_HOME}/config.yaml" ]; then
   cp "${HERMES_HOME}/config.yaml.rendered" "${HERMES_HOME}/config.yaml"
   echo "config.yaml written"
 else
-  echo "config.yaml preserved (set OVERWRITE_CONFIG=true to regenerate)"
+  echo "config.yaml preserved (OVERWRITE_CONFIG=false)"
 fi
 
 echo "==== Redirecting PID and Lock Files to /tmp ===="

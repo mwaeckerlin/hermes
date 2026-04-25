@@ -13,8 +13,8 @@ services:
       # ── SSH key for sandbox (required) ─────────────────────────────────────
       HERMES_SANDBOX_SSH_PRIVATE_KEY:
       # ── Config control ─────────────────────────────────────────────────────
-      # Set OVERWRITE_CONFIG (non-empty) to force re-render and overwrite config.yaml on startup.
-      # Leave unset to preserve existing config.yaml in the hermes-data volume.
+      # Unset/true overwrites config.yaml from the template on startup.
+      # Set false to preserve manual edits in the hermes-data volume.
       OVERWRITE_CONFIG:
       # Override auto-selected default model (e.g. "anthropic/claude-opus-4.6")
       HERMES_DEFAULT_MODEL:
@@ -81,6 +81,7 @@ services:
       HERMES_STREAMING_YAML:
       HERMES_SKILLS_YAML:
       HERMES_AGENT_YAML:
+      HERMES_APPROVALS_YAML:
       HERMES_PLATFORM_TOOLSETS_YAML:
       HERMES_STT_YAML:
       HERMES_TTS_YAML:
@@ -105,6 +106,8 @@ services:
       HERMES_GATEWAY_DRAIN_TIMEOUT:
       HERMES_REASONING_EFFORT:
       HERMES_AGENT_VERBOSE:
+      HERMES_APPROVALS_MODE:
+      HERMES_APPROVALS_TIMEOUT:
       HERMES_COMPRESSION_ENABLED:
       HERMES_COMPRESSION_THRESHOLD:
       HERMES_COMPRESSION_TARGET_RATIO:

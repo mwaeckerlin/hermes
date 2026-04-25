@@ -206,6 +206,19 @@ agent:
 {% endif %}
 
 # =============================================================================
+# Dangerous Command Approvals
+# =============================================================================
+{% if HERMES_APPROVALS_YAML | default('') %}
+approvals: {{ HERMES_APPROVALS_YAML }}
+{% else %}
+approvals:
+  mode: "{{ HERMES_APPROVALS_MODE | default('off', true) }}"
+{% if HERMES_APPROVALS_TIMEOUT | default('') %}
+  timeout: {{ HERMES_APPROVALS_TIMEOUT | int }}
+{% endif %}
+{% endif %}
+
+# =============================================================================
 # Platform Toolsets
 # =============================================================================
 {% if HERMES_PLATFORM_TOOLSETS_YAML | default('') %}
