@@ -75,11 +75,44 @@ async def claim_next_todo():
     return {"ok": item is not None, "item": item}
 
 
+@router.post("/open")
+async def open_todo(req: AddTodoRequest):
+    """Agent/API transition: create an open TODO item."""
+    try:
+        return {"ok": True, "item": _store.add(req.title, req.notes)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.post("/done/{item_id}")
 async def done_todo(item_id: str, req: UpdateTodoRequest):
     """Agent/API transition: move an in-progress TODO item to done."""
     try:
         item = _store.agent_done(item_id, progress_note=req.progress_note)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "item": item}
+
+
+@router.post("/block/{item_id}")
+async def block_todo(item_id: str, req: UpdateTodoRequest):
+    """User or agent transition: move an open or in-progress TODO item to blocked."""
+    try:
+        item = _store.block(item_id, progress_note=req.progress_note)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, "item": item}
+
+
+@router.post("/reopen/{item_id}")
+async def reopen_todo(item_id: str, req: UpdateTodoRequest):
+    """User or agent transition: move a blocked TODO item back to open."""
+    try:
+        item = _store.reopen(item_id, progress_note=req.progress_note)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:

@@ -82,6 +82,22 @@ def test_user_accepts_done_item(tmp_path):
     assert accepted["progress"][-1]["note"] == "Looks good"
 
 
+def test_user_or_agent_can_block_and_reopen_items(tmp_path):
+    store = TodoStore(tmp_path / "todos.json")
+    open_item = store.add("Wait for input")
+    progress_item = store.add("Wait during work")
+    store.claim_next()
+
+    blocked_open = store.block(open_item["id"], progress_note="Need details")
+    blocked_progress = store.block(progress_item["id"], progress_note="Need access")
+    reopened = store.reopen(open_item["id"], progress_note="Details received")
+
+    assert blocked_open["status"] == "blocked"
+    assert blocked_progress["status"] == "blocked"
+    assert reopened["status"] == "open"
+    assert reopened["progress"][-1]["note"] == "Details received"
+
+
 def test_user_cancels_any_state_but_agent_cannot_cancel(tmp_path):
     store = TodoStore(tmp_path / "todos.json")
     item = store.add("Cancel me")

@@ -77,6 +77,8 @@ test("UI exposes only user-owned transition actions", () => {
   assert.ok(source.includes("/api/plugins/todo/reject/"));
   assert.ok(source.includes("/api/plugins/todo/accept/"));
   assert.ok(source.includes("/api/plugins/todo/delete"));
+  assert.ok(source.includes("/api/plugins/todo/block/"));
+  assert.ok(source.includes("/api/plugins/todo/reopen/"));
   assert.ok(source.includes("Reject"));
   assert.ok(source.includes("Accept"));
   assert.ok(source.includes("Delete"));
@@ -85,6 +87,7 @@ test("UI exposes only user-owned transition actions", () => {
 test("supports accepted state", () => {
   const source = readSource();
 
+  assert.ok(source.includes("blocked: \"Blocked\""));
   assert.ok(source.includes("accepted: \"Accepted\""));
   assert.ok(source.includes("\"accepted\""));
   assert.ok(source.includes("item.status === \"accepted\""));
@@ -104,4 +107,21 @@ test("polls the TODO API for browser auto-refresh", () => {
   assert.ok(source.includes("setInterval"));
   assert.ok(source.includes("TODO_REFRESH_INTERVAL_MS"));
   assert.ok(source.includes("clearInterval"));
+});
+
+
+test("renames the dashboard title and supports Enter-key progress notes", () => {
+  const source = readSource();
+
+  assert.ok(source.includes("Tasks for the Agent"));
+  assert.ok(source.includes("onKeyDown"));
+  assert.ok(source.includes("e.key === \"Enter\""));
+});
+
+test("clears progress note text after user transition actions", () => {
+  const source = readSource();
+
+  assert.match(source, /cancelTodo\(item\.id, note \|\| \"Cancelled by user\"\); clearNote\(\);/);
+  assert.match(source, /rejectTodo\(item\.id, note \|\| \"Rejected by user\"\); clearNote\(\);/);
+  assert.match(source, /acceptTodo\(item\.id, note \|\| \"Accepted by user\"\); clearNote\(\);/);
 });

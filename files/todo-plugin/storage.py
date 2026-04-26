@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-VALID_STATUSES = ("open", "in_progress", "done", "accepted", "cancelled")
+VALID_STATUSES = ("open", "blocked", "in_progress", "done", "accepted", "cancelled")
 DEFAULT_STATUS = "open"
 
 
@@ -117,6 +117,22 @@ class TodoStore:
             item_id,
             allowed_from=("in_progress",),
             target="done",
+            progress_note=progress_note,
+        )
+
+    def block(self, item_id: str, progress_note: Optional[str] = None) -> Dict[str, Any]:
+        return self._transition_item(
+            item_id,
+            allowed_from=("open", "in_progress"),
+            target="blocked",
+            progress_note=progress_note,
+        )
+
+    def reopen(self, item_id: str, progress_note: Optional[str] = None) -> Dict[str, Any]:
+        return self._transition_item(
+            item_id,
+            allowed_from=("blocked",),
+            target="open",
             progress_note=progress_note,
         )
 

@@ -10,13 +10,14 @@ const {
 
 const STATUS_LABELS = {
   open: "Open",
+  blocked: "Blocked",
   in_progress: "In Progress",
   done: "Done",
   accepted: "Accepted",
   cancelled: "Cancelled",
 };
 
-const STATUS_ORDER = ["open", "in_progress", "done", "accepted", "cancelled"];
+const STATUS_ORDER = ["open", "blocked", "in_progress", "done", "accepted", "cancelled"];
 const TODO_REFRESH_INTERVAL_MS = 5000;
 
 function TodoPage() {
@@ -116,6 +117,8 @@ function TodoPage() {
   const cancelTodo = useCallback((id, comment) => postAction(`/api/plugins/todo/cancel/${id}`, { progress_note: comment }), [postAction]);
   const rejectTodo = useCallback((id, comment) => postAction(`/api/plugins/todo/reject/${id}`, { progress_note: comment }), [postAction]);
   const acceptTodo = useCallback((id, comment) => postAction(`/api/plugins/todo/accept/${id}`, { progress_note: comment }), [postAction]);
+  const blockTodo = useCallback((id, comment) => postAction(`/api/plugins/todo/block/${id}`, { progress_note: comment }), [postAction]);
+  const reopenTodo = useCallback((id, comment) => postAction(`/api/plugins/todo/reopen/${id}`, { progress_note: comment }), [postAction]);
 
   const items = data?.items ?? [];
   const grouped = Object.fromEntries(STATUS_ORDER.map((status) => [status, items.filter((item) => item.status === status)]));
@@ -123,7 +126,7 @@ function TodoPage() {
   return (
     <div style={{ padding: "1.5rem", maxWidth: "980px" }}>
       <div style={{ display: "flex", gap: "1rem", alignItems: "center", marginBottom: "1rem" }}>
-        <h2 style={{ fontSize: "1.25rem", fontWeight: "bold", flex: 1 }}>Local TODO</h2>
+        <h2 style={{ fontSize: "1.25rem", fontWeight: "bold", flex: 1 }}>Tasks for the Agent</h2>
         <Button size="sm" onClick={load} disabled={loading}>{loading ? "Loading…" : "Refresh"}</Button>
       </div>
 
@@ -150,6 +153,8 @@ function TodoPage() {
           cancelTodo={cancelTodo}
           rejectTodo={rejectTodo}
           acceptTodo={acceptTodo}
+          blockTodo={blockTodo}
+          reopenTodo={reopenTodo}
           progressNotes={progressNotes}
           setProgressNotes={setProgressNotes}
           disabled={busy}
@@ -159,7 +164,7 @@ function TodoPage() {
   );
 }
 
-function TodoColumn({ status, items, updateTodo, deleteTodo, cancelTodo, rejectTodo, acceptTodo, progressNotes, setProgressNotes, disabled }) {
+function TodoColumn({ status, items, updateTodo, deleteTodo, cancelTodo, rejectTodo, acceptTodo, blockTodo, reopenTodo, progressNotes, setProgressNotes, disabled }) {
   return (
     <Card style={{ marginBottom: "1rem" }}>
       <CardHeader>
@@ -178,6 +183,8 @@ function TodoColumn({ status, items, updateTodo, deleteTodo, cancelTodo, rejectT
               cancelTodo={cancelTodo}
               rejectTodo={rejectTodo}
               acceptTodo={acceptTodo}
+              blockTodo={blockTodo}
+              reopenTodo={reopenTodo}
               progressNotes={progressNotes}
               setProgressNotes={setProgressNotes}
               disabled={disabled}
@@ -189,10 +196,12 @@ function TodoColumn({ status, items, updateTodo, deleteTodo, cancelTodo, rejectT
   );
 }
 
-function TodoItem({ item, updateTodo, deleteTodo, cancelTodo, rejectTodo, acceptTodo, progressNotes, setProgressNotes, disabled }) {
+function TodoItem({ item, updateTodo, deleteTodo, cancelTodo, rejectTodo, acceptTodo, blockTodo, reopenTodo, progressNotes, setProgressNotes, disabled }) {
   const note = progressNotes[item.id] || "";
   const clearNote = () => setProgressNotes((notes) => ({ ...notes, [item.id]: "" }));
   const canCancel = item.status !== "cancelled" && item.status !== "accepted";
+  const canBlock = item.status === "open" || item.status === "in_progress";
+  const canReopen = item.status === "blocked";
   const canDelete = item.status === "cancelled" || item.status === "accepted";
 
   return (
@@ -201,9 +210,11 @@ function TodoItem({ item, updateTodo, deleteTodo, cancelTodo, rejectTodo, accept
         <Badge>{item.id}</Badge>
         <Badge>{STATUS_LABELS[item.status] || item.status}</Badge>
         <strong style={{ flex: 1 }}>{item.title}</strong>
-        {canCancel && <Button size="sm" variant="outline" onClick={() => cancelTodo(item.id, note || "Cancelled by user")} disabled={disabled}>Cancel</Button>}
-        {item.status === "done" && <Button size="sm" variant="outline" onClick={() => rejectTodo(item.id, note || "Rejected by user")} disabled={disabled}>Reject</Button>}
-        {item.status === "done" && <Button size="sm" variant="outline" onClick={() => acceptTodo(item.id, note || "Accepted by user")} disabled={disabled}>Accept</Button>}
+        {canBlock && <Button size="sm" variant="outline" onClick={() => { blockTodo(item.id, note || "Blocked"); clearNote(); }} disabled={disabled}>Block</Button>}
+        {canReopen && <Button size="sm" variant="outline" onClick={() => { reopenTodo(item.id, note || "Reopened"); clearNote(); }} disabled={disabled}>Reopen</Button>}
+        {canCancel && <Button size="sm" variant="outline" onClick={() => { cancelTodo(item.id, note || "Cancelled by user"); clearNote(); }} disabled={disabled}>Cancel</Button>}
+        {item.status === "done" && <Button size="sm" variant="outline" onClick={() => { rejectTodo(item.id, note || "Rejected by user"); clearNote(); }} disabled={disabled}>Reject</Button>}
+        {item.status === "done" && <Button size="sm" variant="outline" onClick={() => { acceptTodo(item.id, note || "Accepted by user"); clearNote(); }} disabled={disabled}>Accept</Button>}
         {canDelete && <Button size="sm" variant="outline" onClick={() => deleteTodo(item.id)} disabled={disabled}>Delete</Button>}
       </div>
       {item.notes && <p style={{ margin: "0.5rem 0", opacity: 0.75 }}>{item.notes}</p>}
@@ -217,6 +228,13 @@ function TodoItem({ item, updateTodo, deleteTodo, cancelTodo, rejectTodo, accept
           value={note}
           placeholder="Progress note"
           onChange={(e) => setProgressNotes((notes) => ({ ...notes, [item.id]: e.target.value }))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && note.trim()) {
+              e.preventDefault();
+              updateTodo(item.id, { progress_note: note });
+              clearNote();
+            }
+          }}
         />
         <Button
           size="sm"
