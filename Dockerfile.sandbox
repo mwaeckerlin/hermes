@@ -13,6 +13,8 @@ ARG CONFIGURATION_COMMANDS=" \
   && install -m 700 -o \${RUN_USER} -g \${RUN_GROUP} /dev/null /etc/environment \
   "
 
+FROM mwaeckerlin/mcp-github AS mcp_github_skills
+
 FROM mwaeckerlin/ubuntu-base AS build
 ENV CONTAINERNAME="hermes"
 ENV PACKAGES_DEV=" \
@@ -78,6 +80,7 @@ RUN ( \
   ) > /etc/installed-ubuntu-packages
 RUN install -d -m 700 -o ${RUN_USER} -g ${RUN_GROUP} ${RUN_HOME}/.ssh
 ADD files/SKILL.md /opt/hermes/skills/ssh-sandbox/SKILL.md
+COPY --from=mcp_github_skills /app/skills/mcp-github/SKILL.md /opt/hermes/skills/mcp-github/SKILL.md
 ADD files/sandbox-entrypoint.sh /entrypoint.sh
 EXPOSE 22
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=60 \

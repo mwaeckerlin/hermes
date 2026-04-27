@@ -117,7 +117,7 @@ auxiliary:
   # ── Context compression ──────────────────────────────────────────────────
   compression:
 {% if OPENROUTER_API_KEY | default('') %}
-    provider: "auto"
+    provider: "main"
 {% elif ANTHROPIC_API_KEY | default('') %}
     provider: "anthropic"
     model: "claude-haiku-4-5"
@@ -298,10 +298,12 @@ tts: {{ HERMES_TTS_YAML }}
 {% else %}
 tts:
   enabled: {{ HERMES_TTS_ENABLED | default('true') }}
-{% if ELEVENLABS_API_KEY | default('') %}
+{% if HERMES_TTS_PROVIDER | default('') %}
+  provider: "{{ HERMES_TTS_PROVIDER | default('microsoft') }}"
+{% elif ELEVENLABS_API_KEY | default('') %}
   provider: "elevenlabs"
 {% else %}
-  provider: "{{ HERMES_TTS_PROVIDER | default('microsoft') }}"
+  provider: "microsoft"
 {% endif %}
   model_overrides:
     enabled: {{ HERMES_TTS_MODEL_OVERRIDES_ENABLED | default('true') }}

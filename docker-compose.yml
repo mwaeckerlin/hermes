@@ -230,6 +230,7 @@ services:
     environment:
       HERMES_SANDBOX_SSH_PUBLIC_KEY:
       DOCKER_HOST: tcp://hermes-dind:2375
+      MCP_GITHUB_URL: http://mcp-github:4000
     volumes:
       - hermes-workspace:/home/somebody
     security_opt:
@@ -238,10 +239,13 @@ services:
     depends_on:
       hermes-dind:
         condition: service_started
+      mcp-github:
+        condition: service_started
     restart: unless-stopped
     networks:
       - gateway-sandbox
       - sandbox-dind
+      - sandbox-mcp-github
 
   hermes-dind:
     image: docker:dind
@@ -253,6 +257,16 @@ services:
     restart: unless-stopped
     networks:
       - sandbox-dind
+
+  mcp-github:
+    image: mwaeckerlin/mcp-github
+    environment:
+      GITHUB_TOKEN:
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - sandbox-mcp-github
 
   allow-write-access:
     image: mwaeckerlin/allow-write-access
@@ -271,6 +285,7 @@ networks:
     # driver_opts:
     #   encrypted: "true"
   sandbox-dind:
+  sandbox-mcp-github:
 
 volumes:
   hermes-data:
