@@ -256,6 +256,14 @@ Any Docker Secret is automatically available — no explicit mapping required.
 |---|---|---|
 | `MCP_GITHUB_URL` | no (compose default) | MCP GitHub endpoint used by sandboxed sessions. Default in this setup: `http://mcp-github:4000`. The sandbox entrypoint exports it to `/etc/environment`, so the non-root SSH user can read it. |
 
+### MCP Gitea Routing (Sandbox)
+
+| Variable | Required | Description |
+|---|---|---|
+| `MCP_GITEA_URL` | no (compose default) | MCP Gitea endpoint used by sandboxed sessions. Default in this setup: `http://mcp-gitea:4000`. The sandbox entrypoint exports it to `/etc/environment`, so the non-root SSH user can read it. |
+| `GITEA_TOKEN` | no | Personal access token for Gitea API authentication. Passed to the `mcp-gitea` service. |
+| `GITEA_URL` | no | Base URL of the Gitea instance (e.g. `https://gitea.example.com`). Required when using mcp-gitea. |
+
 ### LLM Providers
 
 All optional — configure one or more. If none is set the gateway exits with an error on startup.

@@ -231,6 +231,7 @@ services:
       HERMES_SANDBOX_SSH_PUBLIC_KEY:
       DOCKER_HOST: tcp://hermes-dind:2375
       MCP_GITHUB_URL: http://mcp-github:4000
+      MCP_GITEA_URL: http://mcp-gitea:4000
     volumes:
       - hermes-workspace:/home/somebody
     security_opt:
@@ -241,11 +242,14 @@ services:
         condition: service_started
       mcp-github:
         condition: service_started
+      mcp-gitea:
+        condition: service_started
     restart: unless-stopped
     networks:
       - gateway-sandbox
       - sandbox-dind
       - sandbox-mcp-github
+      - sandbox-mcp-gitea
 
   hermes-dind:
     image: docker:dind
@@ -268,6 +272,17 @@ services:
     networks:
       - sandbox-mcp-github
 
+  mcp-gitea:
+    image: mwaeckerlin/mcp-gitea
+    environment:
+      GITEA_TOKEN:
+      GITEA_URL:
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - sandbox-mcp-gitea
+
   allow-write-access:
     image: mwaeckerlin/allow-write-access
     environment:
@@ -286,6 +301,7 @@ networks:
     #   encrypted: "true"
   sandbox-dind:
   sandbox-mcp-github:
+  sandbox-mcp-gitea:
 
 volumes:
   hermes-data:
