@@ -250,19 +250,25 @@ Any Docker Secret is automatically available — no explicit mapping required.
 | `HERMES_SANDBOX_SSH_PUBLIC_KEY` | **yes** | Ed25519 public key for sandbox SSH access |
 | `HERMES_SANDBOX_SSH_PRIVATE_KEY` | **yes** | Private key (`\n`-encoded), gateway → sandbox |
 
+### MCP GitHub Routing (Sandbox)
+
+| Variable | Required | Description |
+|---|---|---|
+| `MCP_GITHUB_URL` | no (compose default) | MCP GitHub endpoint used by sandboxed sessions. Default in this setup: `http://mcp-github:4000`. The sandbox entrypoint exports it to `/etc/environment`, so the non-root SSH user can read it. |
+
 ### LLM Providers
 
 All optional — configure one or more. If none is set the gateway exits with an error on startup.
 
 | Variable | Description |
 |---|---|
-| `OPENROUTER_API_KEY` | OpenRouter — access to 300+ models via one key. Auto-selects **`openai/gpt-5.5`**. See note below. |
+| `OPENROUTER_API_KEY` | OpenRouter — access to 300+ models via one key. Auto-selects **`~moonshotai/kimi-latest`**. See note below. |
 | `ANTHROPIC_API_KEY` | Direct Anthropic (Claude) |
-| `OPENAI_API_KEY` | Direct OpenAI. Auto-selects **`gpt-5.5`**. Also used for Whisper/TTS if `VOICE_TOOLS_OPENAI_KEY` is unset |
+| `OPENAI_API_KEY` | Direct OpenAI. Auto-selects **`gpt-4.6`**. Also used for Whisper/TTS if `VOICE_TOOLS_OPENAI_KEY` is unset |
 | `GOOGLE_API_KEY` / `GEMINI_API_KEY` | Google Gemini |
 | `LITELLM_BASE_URL` | LiteLLM proxy URL (OpenAI-compatible, e.g. `http://litellm:4000`) |
 | `LITELLM_API_KEY` | API key for the LiteLLM proxy (optional) |
-| `LITELLM_DEFAULT_MODEL` | Default model served by LiteLLM (default: `gpt-4o`) |
+| `LITELLM_DEFAULT_MODEL` | Default model served by LiteLLM (default: `~moonshotai/kimi-latest`) |
 | `HERMES_DEFAULT_MODEL` | Override auto-selected default (e.g. `anthropic/claude-opus-4.6`) |
 
 > **OpenRouter — model ID naming**
@@ -273,10 +279,10 @@ All optional — configure one or more. If none is set the gateway exits with an
 > that include the routing prefix:
 >
 > ```
-> HTTP 400: openrouter/openai/gpt-5.5 is not a valid model ID
+> HTTP 400: openrouter/openai/gpt-5 is not a valid model ID
 > ```
 >
-> The rendered configuration auto-selects `openai/gpt-5.5` when
+> The rendered configuration auto-selects `~moonshotai/kimi-latest` when
 > `OPENROUTER_API_KEY` is set. To use a different model, override with
 > `HERMES_DEFAULT_MODEL=<openrouter-model-slug>` (e.g.
 > `anthropic/claude-3-opus`). Check <https://openrouter.ai/models> for the
@@ -284,8 +290,8 @@ All optional — configure one or more. If none is set the gateway exits with an
 
 > **OpenAI — model ID**
 >
-> When `OPENAI_API_KEY` is set, Hermes auto-selects **`gpt-5.5`** as the default
-> model. The OpenAI API key remains the token; `gpt-5.5` is the model ID sent to
+> When `OPENAI_API_KEY` is set, Hermes auto-selects **`gpt-4.6`** as the default
+> model. The OpenAI API key remains the token; `gpt-4.6` is the model ID sent to
 > the OpenAI API.
 >
 > Override with `HERMES_DEFAULT_MODEL=<openai-model-id>` if the OpenAI account
