@@ -3,8 +3,9 @@ FROM mwaeckerlin/mcp-github AS mcp_github_skills
 FROM nousresearch/hermes-agent:latest AS build
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends openssh-client && rm -rf /var/lib/apt/lists/*
-COPY --chown=hermes:hermes files/SKILL.md /opt/hermes/skills/ssh-sandbox/SKILL.md
-COPY --from=mcp_github_skills /app/skills/mcp-github/SKILL.md /opt/hermes/skills/mcp-github/SKILL.md
+COPY --chown=hermes:hermes files/skills/ssh-sandbox /opt/hermes/skills/ssh-sandbox
+ADD --chown=hermes:hermes https://github.com/mwaeckerlin/ai-agent-skills.git#master:skills /opt/hermes/skills/
+COPY --from=mcp_github_skills /app/skills/mcp-github /opt/hermes/skills/
 COPY files/config.yaml.j2 /config.yaml.j2.default
 COPY files/render-config.py /render-config.py
 COPY --chmod=0755 files/gateway-entrypoint.sh /entrypoint.sh
