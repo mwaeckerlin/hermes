@@ -17,11 +17,13 @@ echo "==== Installing Skills ===="
 # Pre-populate ~/.hermes/skills/ so the Hermes SSH backend finds them on first connect.
 # Hermes also syncs skills from the gateway to this directory automatically.
 mkdir -p "${RUN_HOME}/.hermes/skills"
-for source_file in /opt/hermes/skills/*/SKILL.md; do
-  [ -f "$source_file" ] || continue
-  skill_name="$(basename "$(dirname "$source_file")")"
-  install -D -m 644 -o "${RUN_USER}" -g "${RUN_GROUP}" \
-    "$source_file" "${RUN_HOME}/.hermes/skills/${skill_name}/SKILL.md"
+for source_dir in /opt/hermes/skills/*; do
+  [ -d "$source_dir" ] || continue
+  skill_name="$(basename "$source_dir")"
+  target_dir="${RUN_HOME}/.hermes/skills/${skill_name}"
+  rm -rf "$target_dir"
+  cp -a "$source_dir" "${RUN_HOME}/.hermes/skills/"
+  chown -R "${RUN_USER}:${RUN_GROUP}" "$target_dir"
 done
 if [ -n "${DOCKER_HOST:-}" ]; then
   echo "==== Enabling Docker Host ===="

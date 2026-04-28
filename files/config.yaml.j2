@@ -21,17 +21,17 @@ model:
 {% if HERMES_DEFAULT_MODEL | default('') %}
   default: "{{ HERMES_DEFAULT_MODEL }}"
 {% elif LITELLM_BASE_URL | default('') %}
-  default: "{{ LITELLM_DEFAULT_MODEL | default('~moonshotai/kimi-latest') }}"
+  default: "{{ LITELLM_DEFAULT_MODEL | default('gpt-4o') }}"
 {% elif OPENROUTER_API_KEY | default('') %}
-  default: "~moonshotai/kimi-latest"
+  default: "openai/gpt-5.5"
 {% elif OPENAI_API_KEY | default('') %}
-  default: "gpt-4.6"
+  default: "gpt-5.5"
 {% elif ANTHROPIC_API_KEY | default('') %}
   default: "anthropic/claude-opus-4.6"
 {% elif GOOGLE_API_KEY | default('') or GEMINI_API_KEY | default('') %}
-  default: "gemini/gemini-3.1-pro-preview"
+  default: "gemini/gemini-2.5-pro"
 {% else %}
-  default: "gpt-4.6"
+  default: "openai/gpt-5.5"
 {% endif %}
   # Provider routing:
   # - "custom": use custom base_url (LiteLLM)
