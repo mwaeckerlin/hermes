@@ -78,7 +78,7 @@ services:
       # Local TODO dashboard plugin storage override (optional)
       HERMES_TODO_FILE:
       # GitHub (Skills Hub + higher API rate limits)
-      GITHUB_TOKEN:
+      # GITHUB_TOKEN: Access through MCP
       # Groq (free-tier Whisper STT)
       GROQ_API_KEY:
       # ── config.yaml section overrides (JSON strings, JSON is valid YAML) ────
