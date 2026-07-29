@@ -16,6 +16,8 @@ Or connect a chat platform (Telegram, Discord, Slack) and skip the HTTP ports en
 
 **Target audience:** Security-aware **developer** with basic Docker know-how.
 
+All features are listed in [FEATURES.md](FEATURES.md), all tests in [TESTS.md](TESTS.md). The sandbox builds on [mwaeckerlin/sandbox-base](https://github.com/mwaeckerlin/sandbox-base); docker-in-docker runs the rootless [mwaeckerlin/dockindock](https://github.com/mwaeckerlin/dockindock), which needs no host configuration.
+
 ![](doc/overview.svg)
 
 <details>
