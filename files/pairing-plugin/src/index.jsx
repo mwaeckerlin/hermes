@@ -35,14 +35,15 @@ function PairingPage() {
     return () => clearInterval(timer);
   }, [load]);
 
+  // hermes never hands out the code of a pending request, only its id
   const approve = useCallback(
-    (platform, code) => {
-      const key = `${platform}:${code}`;
+    (platform, requestId) => {
+      const key = `${platform}:${requestId}`;
       setBusy((b) => ({ ...b, [key]: true }));
       fetchJSON("/api/plugins/pairing/approve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ platform, code }),
+        body: JSON.stringify({ platform, request_id: requestId }),
       })
         .then((r) => {
           if (!r.ok) setError(r.error || "Failed to approve");
@@ -133,14 +134,13 @@ function PairingPage() {
                   >
                     <Th>Platform</Th>
                     <Th>User</Th>
-                    <Th>Code</Th>
                     <Th>Age</Th>
                     <Th last />
                   </tr>
                 </thead>
                 <tbody>
                   {pending.map((p) => {
-                    const key = `${p.platform}:${p.code}`;
+                    const key = `${p.platform}:${p.request_id}`;
                     return (
                       <tr
                         key={key}
@@ -152,13 +152,12 @@ function PairingPage() {
                           <Badge>{p.platform}</Badge>
                         </Td>
                         <Td>{p.user_name || p.user_id}</Td>
-                        <Td mono>{p.code}</Td>
                         <Td muted>{p.age_minutes}m ago</Td>
                         <Td last>
                           <Button
                             size="sm"
-                            disabled={!!busy[key]}
-                            onClick={() => approve(p.platform, p.code)}
+                            disabled={!!busy[key] || !p.request_id}
+                            onClick={() => approve(p.platform, p.request_id)}
                           >
                             {busy[key] ? "…" : "Approve"}
                           </Button>

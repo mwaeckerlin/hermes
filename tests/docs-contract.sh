@@ -64,7 +64,8 @@ if [[ -f FEATURES.md && -f TESTS.md ]]; then
     fi
 fi
 
-SKIPS=$(grep -rnE 'pytest\.mark\.skip|skipif|xfail|pytest\.skip\(' tests/e2e --include='*.py' 2>/dev/null)
+SKIPS=$(grep -rnE 'pytest\.mark\.skip|skipif|xfail|pytest\.skip\(' tests --include='*.py'
+        grep -rnE '\b(test|it|describe)\.(skip|todo|only)\b|\{ *skip: *true' files/*/test --include='*.js')
 if [[ -n "${SKIPS}" ]]; then
     _fail "no_skipped_tests" "skip/xfail markers found: ${SKIPS}"
 else

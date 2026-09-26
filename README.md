@@ -1,20 +1,19 @@
 # Simple Secure Hermes in SSH Sandbox
 
-Combine Hermes with security and ease of use! Run a fully sandboxed
-[NousResearch Hermes agent](https://github.com/NousResearch/hermes-agent)
-out of the box — locally or in a cloud.
+Combine Hermes with security and ease of use! Run a fully sandboxed [NousResearch Hermes agent](https://github.com/NousResearch/hermes-agent) out of the box — locally or in a cloud.
 
-**It has never been so easy to run a *secure* sandboxed Hermes!**:
+A sandboxed Hermes runs after these steps:
+
 1. get an API key (e.g. [OpenRouter](https://openrouter.ai/keys), [Anthropic](https://console.anthropic.com/), or [OpenAI](https://platform.openai.com/api-keys))
 2. write some [configuration variables in `.env`](#local-development-setup)
 3. run `npm start`
 4. open the dashboard: [`http://localhost:9119/`](http://localhost:9119/)
 
-Port 8642 is the internal gateway API and health endpoint (`/healthz`) — it is **not** published to the host. The web dashboard runs as a separate service on port 9119 and is the only publicly exposed port.
+Port 8642 is the internal gateway API and health endpoint (`/healthz`) — it is **not** published to the host. The web dashboard runs as a separate service on port 9119 and is the only publicly exposed port.
 
 Or connect a chat platform (Telegram, Discord, Slack) and skip the HTTP ports entirely.
 
-**Target audience:** Security-aware **developer** with basic Docker know-how.
+The stack is written for security-aware developers with basic Docker know-how.
 
 All features are listed in [FEATURES.md](FEATURES.md), all tests in [TESTS.md](TESTS.md). The sandbox builds on [mwaeckerlin/sandbox-base](https://github.com/mwaeckerlin/sandbox-base); docker-in-docker runs the rootless [mwaeckerlin/dockindock](https://github.com/mwaeckerlin/dockindock), which needs no host configuration.
 
@@ -43,16 +42,13 @@ cloud Docker {
 
 ## Local TODO Dashboard Plugin
 
-The dashboard image includes a small local TODO plugin for agent task tracking.
-It stores tasks in the Hermes data volume, not on a public server.
+The dashboard image includes a small local TODO plugin for agent task tracking. It stores tasks in the Hermes data volume, not on a public server.
 
-Open the dashboard and select the **TODO** tab to:
+A task moves through `open`, `in_progress`, `done`, `accepted` and `cancelled`. Each transition belongs to one side:
 
-- add or cancel tasks as the human operator
-- reject a `done` task back to `open` with a comment
-- claim the next open task as the agent
-- move tasks through `open`, `in_progress`, `done`, and `cancelled`
-- append short progress notes
+- **the human operator** (dashboard **TODO** tab) adds tasks, cancels a task in any state, accepts a `done` task or rejects it back to `open` with a comment, and deletes a task once it is `accepted` or `cancelled`
+- **the agent** (plugin API `POST /api/plugins/todo/claim-next` and `POST /api/plugins/todo/done/<id>`) claims the next open task and marks it `done`; the dashboard shows no button for these two transitions
+- both sides append short progress notes
 
 The plugin persists JSON at:
 
@@ -60,10 +56,7 @@ The plugin persists JSON at:
 $HERMES_HOME/todo-plugin/todos.json
 ```
 
-In this compose setup, dashboard and gateway both mount the `hermes-data` volume at
-`/opt/data`, so TODO data survives container rebuilds and is visible to the
-agent runtime via the shared Hermes data volume. The SSH sandbox remains isolated
-and does not mount this volume directly.
+In this compose setup, dashboard and gateway both mount the `hermes-data` volume at `/opt/data`, so TODO data survives container rebuilds and is visible to the agent runtime via the shared Hermes data volume. The SSH sandbox remains isolated and does not mount this volume directly.
 
 Override the path if needed:
 
@@ -74,61 +67,36 @@ environment:
 
 ## Security Model
 
-The primary security mechanism is **strict isolation**: the AI runs in a dedicated
-sandbox container that has no access to the gateway's secrets, host files, or
-production data.
+The primary security mechanism is **strict isolation**: the AI runs in a dedicated sandbox container that has no access to the gateway's secrets, host files, or production data.
 
 ### Container Segregation
 
-- **Isolated sandbox** — the gateway controls all secrets. The agent executes
-  commands inside the sandbox via SSH. No API keys, no LLM tokens, and no gateway
-  configuration are accessible from the sandbox.
-- **Container hardening** — `no-new-privileges` and `pids_limit: 256` prevent
-  privilege escalation and fork bombs.
+- **Isolated sandbox** — the gateway controls all secrets. The agent executes commands inside the sandbox via SSH. No API keys, no LLM tokens, and no gateway configuration are accessible from the sandbox.
+- **Container hardening** — `no-new-privileges` and `pids_limit: 256` prevent privilege escalation and fork bombs.
 
 ### Network Isolation
 
-- **Segregated networks** — each container pair communicates on its own internal
-  Docker network. The gateway and sandbox share `gateway-sandbox`; the dashboard
-  and gateway share `dashboard-gateway` (the dashboard has **no direct access to
-  the sandbox**); the sandbox and the Docker-in-Docker daemon share `sandbox-dind`.
-  No cross-network traffic between non-adjacent tiers.
-- **Network encryption** (production) — encrypt overlay networks when deploying
-  to Docker Swarm: set `networks.<name>.driver_opts.encrypted: "true"` on each
-  network, or add a service mesh.
-- **Minimal port exposure** — only port 9119 (dashboard) is published. The
-  gateway port 8642 is internal only, reachable solely via the `dashboard-gateway`
-  network. If you use a chat platform such as Telegram you can close port 9119
-  as well. *Do not expose port 9119 to the Internet without a TLS reverse proxy
-  and authentication.*
+- **Segregated networks** — each container pair communicates on its own internal Docker network. The gateway and sandbox share `gateway-sandbox`; the dashboard and gateway share `dashboard-gateway` (the dashboard has **no direct access to the sandbox**); the sandbox and the Docker-in-Docker daemon share `sandbox-dind`; the sandbox and the GitHub MCP service share `sandbox-mcp-github` (the `GITHUB_TOKEN` stays in the MCP service and never reaches the sandbox). No cross-network traffic between non-adjacent tiers.
+- **Network encryption** (production) — encrypt overlay networks when deploying to Docker Swarm: set `networks.<name>.driver_opts.encrypted: "true"` on each network, or add a service mesh.
+- **Minimal port exposure** — only port 9119 (dashboard) is published. The gateway port 8642 is internal only, reachable solely via the `dashboard-gateway` network. If you use a chat platform such as Telegram you can close port 9119 as well. *Do not expose port 9119 to the Internet without a TLS reverse proxy and authentication.*
 
 ### Secrets
 
-- **Docker Secrets** (production) — use `docker secret` instead of environment
-  variables. The gateway entrypoint reads every file in `/run/secrets/`, uppercases
-  the filename, and exports it as an environment variable. Example:
-  `/run/secrets/hermes_sandbox_ssh_private_key` → `HERMES_SANDBOX_SSH_PRIVATE_KEY`.
+- **Docker Secrets** (production) — use `docker secret` instead of environment variables. The gateway entrypoint reads every file in `/run/secrets/`, uppercases the filename, and exports it as an environment variable. Example: `/run/secrets/hermes_sandbox_ssh_private_key` → `HERMES_SANDBOX_SSH_PRIVATE_KEY`.
 
 ### SSH Trust Assumptions
 
-The gateway connects to the sandbox over SSH using `StrictHostKeyChecking=no`.
-This is intentional and acceptable because:
+The gateway connects to the sandbox over SSH using `StrictHostKeyChecking=no`. This is intentional and acceptable because:
 
-- Both containers share an internal Docker network (`gateway-sandbox`) that is
-  not reachable from outside Docker.
-- The security boundary is Docker network isolation, not SSH host key
-  verification. Trusting Docker's internal networking is consistent with the
-  overall threat model.
-- For multi-host deployments (Docker Swarm), enable overlay network encryption
-  (see [Network Isolation](#network-isolation) above) to protect traffic in transit.
+- Both containers share an internal Docker network (`gateway-sandbox`) that is not reachable from outside Docker.
+- The security boundary is Docker network isolation, not SSH host key verification. Trusting Docker's internal networking is consistent with the overall threat model.
+- For multi-host deployments (Docker Swarm), enable overlay network encryption (see [Network Isolation](#network-isolation) above) to protect traffic in transit.
 
-Do **not** rely on SSH host key verification to protect against a compromised
-Docker host — that is outside the scope of this design.
+Do **not** rely on SSH host key verification to protect against a compromised Docker host — that is outside the scope of this design.
 
 ### Docker-in-Docker
 
-The `hermes-dind` service provides an isolated Docker daemon for the sandbox. Gives the agent full root inside
-the DinD container. The host Docker daemon is completely separate.
+The `hermes-dind` service provides an isolated Docker daemon for the sandbox. It is the rootless [mwaeckerlin/dockindock](https://github.com/mwaeckerlin/dockindock): the agent controls that daemon fully, and a compromise of the daemon yields its unprivileged user, never root. The host Docker daemon is completely separate.
 
 ## Full Architecture
 
@@ -149,7 +117,7 @@ cloud docker {
     ctrl - cfg
   }
 
-  node "nousresearch/hermes-agent\n(dashboard)" as dash {
+  node "mwaeckerlin/hermes:dashboard" as dash {
     [Dashboard] as ui
   }
 
@@ -159,18 +127,23 @@ cloud docker {
     sshd -right- ws
   }
 
-  node "docker:dind" as dind {
-    [Docker Daemon] as dd
-    storage "hermes-docker" as dv
+  node "mwaeckerlin/dockindock" as dind {
+    [Rootless Docker Daemon] as dd
+    storage "hermes-docker\n/docker-data" as dv
     dd -left- dv
+  }
+
+  node "mwaeckerlin/mcp-github" as mcp {
+    [GitHub MCP] as gh
   }
 }
 
-user --> ctrl : "HTTP :8642\n(API / health)"
 user --> ui : "HTTP :9119\n(web dashboard)"
+user --> ctrl : "chat platforms"
 ui --> ctrl : "GATEWAY_HEALTH_URL\nhttp://hermes-gateway:8642"
 ctrl --> sshd : "SSH :22\n(execute commands)"
-sshd -left-> dd : docker
+sshd -left-> dd : "docker\ntcp :2375"
+sshd --> gh : "MCP :4000"
 @enduml
 ```
 
@@ -205,45 +178,42 @@ OPENAI_API_KEY=sk-...
 GOOGLE_API_KEY=AIza...
 ```
 
-The rendered configuration auto-selects the default model from whichever key is set
-(priority: OpenAI → OpenRouter → Anthropic → Google → LiteLLM). Override with
-`HERMES_DEFAULT_MODEL`.
+The rendered configuration auto-selects the default model from whichever key is set (priority: OpenAI → OpenRouter → Anthropic → Google → LiteLLM). Override with `HERMES_DEFAULT_MODEL`.
 
 ### 2. Start
 
-**In foreground (see logs in real-time):**
+`npm start` runs the stack in the foreground and shows the logs as they arrive:
+
 ```bash
-npm start
+$ npm start
 ```
 
-**In background (daemon mode):**
+`npm run start:daemon` runs it in the background:
+
 ```bash
-npm run start:daemon
+$ npm run start:daemon
 ```
 
 Dashboard (web UI): `http://localhost:9119/`
 
-The gateway API/health endpoint (`http://hermes-gateway:8642/healthz`) is
-internal only — accessible within Docker but not published to the host.
+The gateway API/health endpoint (`http://hermes-gateway:8642/healthz`) is internal only — accessible within Docker but not published to the host.
 
-**Local / trusted-network use only.** Do not expose the dashboard port to the
-Internet without a TLS reverse proxy and authentication.
+This setup is for local or trusted-network use only. Do not expose the dashboard port to the Internet without a TLS reverse proxy and authentication.
 
 ## Full Configuration Guide
 
 ### Automatic Secret Mapping
 
-The gateway entrypoint reads every file under `/run/secrets/` and exports it as
-an environment variable. Filename is uppercased, dashes replaced by underscores:
+The gateway entrypoint reads every file under `/run/secrets/` and exports it as an environment variable. Filename is uppercased, dashes replaced by underscores:
 
 | Docker secret name | Environment variable |
 |---|---|
 | `hermes_sandbox_ssh_private_key` | `HERMES_SANDBOX_SSH_PRIVATE_KEY` |
 | `openrouter_api_key` | `OPENROUTER_API_KEY` |
 | `telegram_bot_token` | `TELEGRAM_BOT_TOKEN` |
-| … | … |
+| … | … |
 
-Any Docker Secret is automatically available — no explicit mapping required.
+Any Docker Secret is automatically available — no explicit mapping required.
 
 ### Core Variables
 
@@ -260,11 +230,11 @@ Any Docker Secret is automatically available — no explicit mapping required.
 
 ### LLM Providers
 
-All optional — configure one or more. If none is set the gateway exits with an error on startup.
+All optional — configure one or more. If none is set the gateway exits with an error on startup.
 
 | Variable | Description |
 |---|---|
-| `OPENROUTER_API_KEY` | OpenRouter — access to 300+ models via one key. Auto-selects **`~moonshotai/kimi-latest`**. See note below. |
+| `OPENROUTER_API_KEY` | OpenRouter — access to 300+ models via one key. Auto-selects **`~moonshotai/kimi-latest`**. See note below. |
 | `ANTHROPIC_API_KEY` | Direct Anthropic (Claude) |
 | `OPENAI_API_KEY` | Direct OpenAI. Auto-selects **`gpt-4.6`**. Also used for Whisper/TTS if `VOICE_TOOLS_OPENAI_KEY` is unset |
 | `GOOGLE_API_KEY` / `GEMINI_API_KEY` | Google Gemini |
@@ -273,11 +243,11 @@ All optional — configure one or more. If none is set the gateway exits with an
 | `LITELLM_DEFAULT_MODEL` | Default model served by LiteLLM (default: `~moonshotai/kimi-latest`) |
 | `HERMES_DEFAULT_MODEL` | Override auto-selected default (e.g. `anthropic/claude-opus-4.6`) |
 
-> **OpenRouter — model ID naming**
+> **OpenRouter — model ID naming**
 >
 > Hermes routes OpenRouter requests by calling `https://openrouter.ai/api/v1`
 > directly. The `model` field in the request must be the **bare OpenRouter model
-> slug** — do **not** include an `openrouter/` prefix. OpenRouter rejects IDs
+> slug** — do **not** include an `openrouter/` prefix. OpenRouter rejects IDs
 > that include the routing prefix:
 >
 > ```
@@ -290,7 +260,7 @@ All optional — configure one or more. If none is set the gateway exits with an
 > `anthropic/claude-3-opus`). Check <https://openrouter.ai/models> for the
 > exact model slugs.
 
-> **OpenAI — model ID**
+> **OpenAI — model ID**
 >
 > When `OPENAI_API_KEY` is set, Hermes auto-selects **`gpt-4.6`** as the default
 > model. The OpenAI API key remains the token; `gpt-4.6` is the model ID sent to
@@ -317,29 +287,20 @@ Channels are enabled by setting the corresponding token. No explicit `enabled: t
 | `WHATSAPP_ALLOWED_USERS` | Comma-separated phone numbers |
 | `GATEWAY_ALLOW_ALL_USERS` | `true` (Hermes default) = anyone in your chat groups can use the bot; set to `false` and configure per-platform `*_ALLOWED_USERS` for production. |
 
-For Telegram bots created with @BotFather: if the bot should also work in group
-chats, run `/setprivacy` in BotFather and set the bot to `Disable`. Otherwise
-Telegram privacy mode will prevent the bot from seeing normal group messages.
+For Telegram bots created with @BotFather: if the bot should also work in group chats, run `/setprivacy` in BotFather and set the bot to `Disable`. Otherwise Telegram privacy mode will prevent the bot from seeing normal group messages.
 
-When a new user contacts the bot for the first time, they receive a random pairing
-code and are asked to pass it to the bot owner for approval. To approve (or revoke)
-users, open the **Dashboard → Pairing** tab at `http://localhost:9119/pairing`.
-The Pairing tab lists all pending codes with one-click **Approve** buttons, and
-shows all approved users with **Revoke** buttons. No CLI required.
+When a new user contacts the bot for the first time, they receive a random pairing code and are asked to pass it to the bot owner for approval. To approve (or revoke) users, open the **Dashboard → Pairing** tab at `http://localhost:9119/pairing`. The Pairing tab lists every pending request with platform, user and age and a one-click **Approve** button, and shows all approved users with **Revoke** buttons. Hermes never shows the code itself outside the chat, so the tab approves the request directly. No CLI required.
 
 ### Command Approvals
 
-This deployment executes agent commands inside the isolated SSH sandbox. The
-sandbox has no gateway secrets, no LLM tokens, and no direct host filesystem
-access, so command approval prompts are disabled by default:
+This deployment executes agent commands inside the isolated SSH sandbox. The sandbox has no gateway secrets, no LLM tokens, and no direct host filesystem access, so command approval prompts are disabled by default:
 
 ```yaml
 approvals:
   mode: off
 ```
 
-Use `HERMES_APPROVALS_MODE=manual` or `HERMES_APPROVALS_MODE=smart` if you run a
-different deployment where terminal commands can affect trusted systems.
+Use `HERMES_APPROVALS_MODE=manual` or `HERMES_APPROVALS_MODE=smart` if you run a different deployment where terminal commands can affect trusted systems.
 
 ### Tool API Keys
 
@@ -390,13 +351,9 @@ HERMES_IMAGE_GEN_YAML={"use_gateway":true,"model":"fal-ai/gpt-image-2"}
 
 ### Text-to-Speech Configuration
 
-Hermes can reply to voice messages with a synthesized voice. By default it uses
-**Microsoft TTS** — free, no API key required. When `ELEVENLABS_API_KEY` is set,
-ElevenLabs is selected automatically for higher-quality audio.
+Hermes can reply to voice messages with a synthesized voice. By default it uses **Microsoft TTS** — free, no API key required. When `ELEVENLABS_API_KEY` is set, ElevenLabs is selected automatically for higher-quality audio.
 
-**Automatic language matching** (`model_overrides.enabled: true`, the default)
-instructs the TTS provider to select a voice that matches the detected language of
-the text. German text gets a German voice, French text gets a French voice, etc.
+Automatic language matching (`model_overrides.enabled: true`, the default) instructs the TTS provider to select a voice that matches the detected language of the text. German text gets a German voice, French text gets a French voice, etc.
 
 | Variable | Description |
 |---|---|
@@ -405,19 +362,16 @@ the text. German text gets a German voice, French text gets a French voice, etc.
 | `HERMES_TTS_MODEL_OVERRIDES_ENABLED` | `false` to disable automatic language-matched voice selection (default: `true`) |
 | `HERMES_TTS_YAML` | Override the entire `tts:` section with a JSON/YAML string |
 
-**Provider auto-selection priority:**
+The provider is selected automatically in this order:
 
 1. If `ELEVENLABS_API_KEY` is set → `elevenlabs`
 2. Otherwise → `microsoft` (free, no key needed)
 
-Override with `HERMES_TTS_PROVIDER` or use `HERMES_TTS_YAML` for full
-customization of the TTS section.
+Override with `HERMES_TTS_PROVIDER` or use `HERMES_TTS_YAML` for full customization of the TTS section.
 
 ### Vision Configuration
 
-Hermes uses a dedicated vision model to understand images sent in chat. Vision is
-configured under `auxiliary.vision` (not a top-level key). The provider and model
-are **auto-selected** based on whichever LLM API key is active:
+Hermes uses a dedicated vision model to understand images sent in chat. Vision is configured under `auxiliary.vision` (not a top-level key). The provider and model are **auto-selected** based on whichever LLM API key is active:
 
 | Active key | Default vision provider & model |
 |---|---|
@@ -455,10 +409,9 @@ Web tools auto-select a backend based on available API keys (priority: Firecrawl
 | `HERMES_BROWSER_CDP_URL` | Attach to an existing Chrome via CDP URL instead of launching a headless browser |
 | `HERMES_BROWSER_YAML` | Override the entire `browser:` section with a JSON/YAML string |
 
-### Privacy — PII Redaction
+### Privacy — PII Redaction
 
-When `HERMES_PRIVACY_REDACT_PII=true`, the gateway hashes phone numbers, user IDs and
-chat IDs in the system prompt before sending context to the LLM.
+When `HERMES_PRIVACY_REDACT_PII=true`, the gateway hashes phone numbers, user IDs and chat IDs in the system prompt before sending context to the LLM.
 
 | Variable | Description |
 |---|---|
@@ -478,8 +431,7 @@ Simulate human-like response pacing in messaging platforms.
 
 ### Prompt Caching
 
-Controls the Anthropic prompt cache TTL. Only affects Claude models via the Anthropic
-API or OpenRouter.
+Controls the Anthropic prompt cache TTL. Only affects Claude models via the Anthropic API or OpenRouter.
 
 | Variable | Description |
 |---|---|
@@ -488,8 +440,7 @@ API or OpenRouter.
 
 ### OpenRouter Provider Routing
 
-Controls how requests are routed across providers on OpenRouter.
-Only active when `OPENROUTER_API_KEY` is set.
+Controls how requests are routed across providers on OpenRouter. Only active when `OPENROUTER_API_KEY` is set.
 
 | Variable | Description |
 |---|---|
@@ -500,16 +451,13 @@ Only active when `OPENROUTER_API_KEY` is set.
 
 | Variable | config.yaml key | Description |
 |---|---|---|
-| `HERMES_UNAUTHORIZED_DM_BEHAVIOR` | `unauthorized_dm_behavior` | `pair` (default — send pairing code) \| `ignore` |
+| `HERMES_UNAUTHORIZED_DM_BEHAVIOR` | `unauthorized_dm_behavior` | `pair` (default — send pairing code) \| `ignore` |
 | `HERMES_TIMEZONE` | `timezone` | IANA timezone string (e.g. `Europe/Berlin`). Default: server-local time |
 | `HERMES_FILE_READ_MAX_CHARS` | `file_read_max_chars` | Max chars per `read_file` call. Hermes default: 100 000 |
 
-### config.yaml — Section-Level Overrides
+### config.yaml — Section-Level Overrides
 
-The gateway renders `files/config.yaml.j2` (Jinja2 template) into
-`/opt/data/config.yaml` on startup. Each top-level YAML section can be
-completely replaced by setting `HERMES_<SECTION>_YAML` to a JSON string
-(JSON is valid YAML):
+The gateway renders `files/config.yaml.j2` (Jinja2 template) into `/opt/data/config.yaml` on startup. Each top-level YAML section can be completely replaced by setting `HERMES_<SECTION>_YAML` to a JSON string (JSON is valid YAML):
 
 | Variable | config.yaml section |
 |---|---|
@@ -538,29 +486,29 @@ completely replaced by setting `HERMES_<SECTION>_YAML` to a JSON string
 | `HERMES_MCP_SERVERS_YAML` | `mcp_servers:` |
 | `HERMES_DISPLAY_YAML` | `display:` |
 
-Example — add an MCP server:
+Example — add an MCP server:
 
 ```bash
 HERMES_MCP_SERVERS_YAML='{"time":{"command":"uvx","args":["mcp-server-time"]}}'
 ```
 
-Example — restrict platform toolsets:
+Example — restrict platform toolsets:
 
 ```bash
 HERMES_PLATFORM_TOOLSETS_YAML='{"telegram":["web","terminal","file","skills","todo"]}'
 ```
 
-### config.yaml — Individual Setting Overrides
+### config.yaml — Individual Setting Overrides
 
 | Variable | config.yaml path | Default |
 |---|---|---|
 | `HERMES_DEFAULT_MODEL` | `model.default` | auto-selected |
 | `HERMES_MODEL_PROVIDER` | `model.provider` | `auto` |
-| `HERMES_MODEL_BASE_URL` | `model.base_url` | — |
+| `HERMES_MODEL_BASE_URL` | `model.base_url` | — |
 | `HERMES_MAX_TURNS` | `agent.max_turns` | `60` |
-| `HERMES_GATEWAY_TIMEOUT` | `agent.gateway_timeout` | — (unlimited) |
-| `HERMES_GATEWAY_TIMEOUT_WARNING` | `agent.gateway_timeout_warning` | — |
-| `HERMES_GATEWAY_DRAIN_TIMEOUT` | `agent.restart_drain_timeout` | — |
+| `HERMES_GATEWAY_TIMEOUT` | `agent.gateway_timeout` | — (unlimited) |
+| `HERMES_GATEWAY_TIMEOUT_WARNING` | `agent.gateway_timeout_warning` | — |
+| `HERMES_GATEWAY_DRAIN_TIMEOUT` | `agent.restart_drain_timeout` | — |
 | `HERMES_REASONING_EFFORT` | `agent.reasoning_effort` | `medium` |
 | `HERMES_AGENT_VERBOSE` | `agent.verbose` | `false` |
 | `HERMES_COMPRESSION_ENABLED` | `compression.enabled` | `true` |
@@ -579,35 +527,32 @@ HERMES_PLATFORM_TOOLSETS_YAML='{"telegram":["web","terminal","file","skills","to
 | `HERMES_VISION_PROVIDER` | `auxiliary.vision.provider` | auto-selected from active LLM provider |
 | `HERMES_VISION_MODEL` | `auxiliary.vision.model` | auto-selected per provider (see Vision section) |
 | `HERMES_WEB_EXTRACT_PROVIDER` | `auxiliary.web_extract.provider` | `auto` |
-| `HERMES_WEB_EXTRACT_MODEL` | `auxiliary.web_extract.model` | — |
-| `HERMES_FILE_READ_MAX_CHARS` | `file_read_max_chars` | — (Hermes default: 100 000) |
-| `HERMES_TOOL_OUTPUT_MAX_BYTES` | `tool_output.max_bytes` | — (Hermes default: 50 000) |
-| `HERMES_TOOL_OUTPUT_MAX_LINES` | `tool_output.max_lines` | — (Hermes default: 2000) |
-| `HERMES_TOOL_OUTPUT_MAX_LINE_LENGTH` | `tool_output.max_line_length` | — (Hermes default: 2000) |
+| `HERMES_WEB_EXTRACT_MODEL` | `auxiliary.web_extract.model` | — |
+| `HERMES_FILE_READ_MAX_CHARS` | `file_read_max_chars` | — (Hermes default: 100 000) |
+| `HERMES_TOOL_OUTPUT_MAX_BYTES` | `tool_output.max_bytes` | — (Hermes default: 50 000) |
+| `HERMES_TOOL_OUTPUT_MAX_LINES` | `tool_output.max_lines` | — (Hermes default: 2000) |
+| `HERMES_TOOL_OUTPUT_MAX_LINE_LENGTH` | `tool_output.max_line_length` | — (Hermes default: 2000) |
 | `HERMES_WEB_BACKEND` | `web.backend` | auto-detected from API keys |
 | `HERMES_BROWSER_INACTIVITY_TIMEOUT` | `browser.inactivity_timeout` | `120` |
-| `HERMES_BROWSER_COMMAND_TIMEOUT` | `browser.command_timeout` | — |
-| `HERMES_BROWSER_CDP_URL` | `browser.cdp_url` | — |
+| `HERMES_BROWSER_COMMAND_TIMEOUT` | `browser.command_timeout` | — |
+| `HERMES_BROWSER_CDP_URL` | `browser.cdp_url` | — |
 | `HERMES_PRIVACY_REDACT_PII` | `privacy.redact_pii` | `false` |
 | `HERMES_VOICE_AUTO_TTS` | `voice.auto_tts` | `false` |
 | `HERMES_VOICE_MAX_RECORDING_SECONDS` | `voice.max_recording_seconds` | `120` |
-| `HERMES_HUMAN_DELAY_MODE` | `human_delay.mode` | — (`off`) |
+| `HERMES_HUMAN_DELAY_MODE` | `human_delay.mode` | — (`off`) |
 | `HERMES_HUMAN_DELAY_MIN_MS` | `human_delay.min_ms` | `800` |
 | `HERMES_HUMAN_DELAY_MAX_MS` | `human_delay.max_ms` | `2500` |
-| `HERMES_PROMPT_CACHING_TTL` | `prompt_caching.cache_ttl` | — (`5m`) |
-| `HERMES_PROVIDER_ROUTING_SORT` | `provider_routing.sort` | — (`price`) |
-| `HERMES_UNAUTHORIZED_DM_BEHAVIOR` | `unauthorized_dm_behavior` | — (`pair`) |
-| `HERMES_TIMEZONE` | `timezone` | — (server-local) |
+| `HERMES_PROMPT_CACHING_TTL` | `prompt_caching.cache_ttl` | — (`5m`) |
+| `HERMES_PROVIDER_ROUTING_SORT` | `provider_routing.sort` | — (`price`) |
+| `HERMES_UNAUTHORIZED_DM_BEHAVIOR` | `unauthorized_dm_behavior` | — (`pair`) |
+| `HERMES_TIMEZONE` | `timezone` | — (server-local) |
 | `HERMES_DISPLAY_TOOL_PROGRESS` | `display.tool_progress` | `all` |
 | `HERMES_DISPLAY_COMPACT` | `display.compact` | `false` |
 | `HERMES_DISPLAY_SKIN` | `display.skin` | `default` |
 
 ### Config Persistence
 
-`config.yaml` is stored in the `hermes-data` Docker volume (`/opt/data`).
-On startup it is rendered from the template and written to the volume by default.
-This keeps template defaults such as disabled command approvals in sync with the
-container image.
+`config.yaml` is stored in the `hermes-data` Docker volume (`/opt/data`). On startup it is rendered from the template and written to the volume by default. This keeps template defaults such as disabled command approvals in sync with the container image.
 
 To preserve manual edits in the volume:
 
@@ -624,30 +569,43 @@ docker compose exec hermes-gateway vi /opt/data/config.yaml
 
 ## Docker-in-Docker
 
-The `hermes-dind` service provides an isolated Docker daemon for the sandbox.
-`DOCKER_HOST=tcp://hermes-dind:2375` is already configured in the sandbox
-container. To disable DinD, comment out the `hermes-dind` service and remove
-the `DOCKER_HOST` environment variable and the `depends_on` entry from the
-sandbox service.
+The `hermes-dind` service provides an isolated Docker daemon for the sandbox. `DOCKER_HOST=tcp://hermes-dind:2375` is already configured in the sandbox container. To disable DinD, comment out the `hermes-dind` service and remove the `DOCKER_HOST` environment variable and the `depends_on` entry from the sandbox service.
 
-**Who needs this?** Developers and DevOps engineers who want Hermes to build,
-run, and test containerized applications. For general use (writing, research,
-scripting), DinD is not needed.
+DinD is needed where Hermes builds, runs and tests containerized applications for developers and DevOps engineers. For general use (writing, research, scripting), it is not needed.
 
-**Security warning:** The AI has full root access inside the DinD daemon. It can
-destroy all images/containers or exhaust disk space on the `hermes-docker` volume.
-DinD is isolated from the host Docker daemon, but within its own daemon the AI
-has unrestricted access. Enable only if you accept that risk.
+The AI has full control of the DinD daemon. It can destroy all images/containers or exhaust disk space on the `hermes-docker` volume. DinD is isolated from the host Docker daemon and runs rootless, but within its own daemon the AI has unrestricted access. Enable only if you accept that risk.
 
 ### DinD in Docker Swarm
 
-Docker Swarm does not support `privileged: true` in stack deploy files.
-Docker-in-Docker is therefore not supported in Swarm mode.
+Docker Swarm does not support `privileged: true` in stack deploy files. Docker-in-Docker is therefore not supported in Swarm mode.
 
 ## Production Checklist
 
 - [ ] All secrets via `docker secret`, not environment variables
 - [ ] Encrypted overlay networks (uncomment `driver_opts: encrypted: "true"` in `docker-compose.yml`)
-- [ ] Port 9119 (dashboard) behind TLS reverse proxy with authentication — or not exposed publicly (not needed when using only chat platforms)
-- [ ] `GATEWAY_ALLOW_ALL_USERS=false` with explicit `TELEGRAM_ALLOWED_USERS`/`DISCORD_*` allowlists (Hermes default is `true` — open access)
+- [ ] Port 9119 (dashboard) behind TLS reverse proxy with authentication — or not exposed publicly (not needed when using only chat platforms)
+- [ ] `GATEWAY_ALLOW_ALL_USERS=false` with explicit `TELEGRAM_ALLOWED_USERS`/`DISCORD_*` allowlists (Hermes default is `true` — open access)
 - [ ] Firewall restricts access to the dashboard port
+
+## Development
+
+```bash
+$ npm run build      # docker compose build of all images
+$ npm test           # the whole suite, after the build
+$ npm run build:doc  # regenerate the diagrams in doc/ from this README
+```
+
+`npm test` runs the register guard (`tests/docs-contract.sh`), the frontend tests of the TODO and pairing plugins, the Python tests inside the built dashboard image (`test/docker-compose.yml`: config rendering, TODO storage and API, pairing API) and the compose wiring contract (`tests/compose-contract.sh`). The Python tests run against the built images, so `npm run build` comes first.
+
+### Images and Tags
+
+The stack builds three images, `mwaeckerlin/hermes:gateway`, `mwaeckerlin/hermes:dashboard` and `mwaeckerlin/hermes:sandbox`. The GitHub workflow `.github/workflows/docker.yml` calls the shared workflow of [mwaeckerlin/scratch](https://github.com/mwaeckerlin/scratch) on every push to `master` and every Monday: it builds each image natively for amd64 and arm64, runs `npm test`, and publishes one multi-platform image per tag. Every image is published under its tag, its tag with the build date, its tag with the version, and its tag with version and date. The gateway at version 1.0.2, built on 26 September 2026, carries these tags:
+
+| Tag | Moves |
+| --- | --- |
+| `gateway` | with every build |
+| `gateway-20260926` | never, one per build day |
+| `gateway-1.0.2` | with every build of that version |
+| `gateway-1.0.2-20260926` | never |
+
+The version is the one in `package.json`. The repository needs the secret `DOCKERHUB_TOKEN`, a Docker Hub access token with read and write.

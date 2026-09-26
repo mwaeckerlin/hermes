@@ -84,6 +84,29 @@ else
     else
         _fail "dashboard_port_published" "dashboard port 9119 not published"
     fi
+
+    # the shared workflow publishes what `npm run deploy` pushes: every
+    # service that builds an image must be named there, and nothing else
+    BUILT=$(docker compose config --format json | python3 -c '
+import json, sys
+services = json.load(sys.stdin)["services"]
+print(" ".join(sorted(n for n, s in services.items() if "build" in s and s.get("image"))))')
+    DEPLOYED=$(python3 -c '
+import json
+words = json.load(open("package.json"))["scripts"].get("deploy", "").split()
+print(" ".join(sorted(words[words.index("push") + 1:])) if words[:3] == ["docker", "compose", "push"] else "")')
+    if [[ -n "${BUILT}" && "${BUILT}" == "${DEPLOYED}" ]]; then
+        _pass "deploy_pushes_every_built_image"
+    else
+        _fail "deploy_pushes_every_built_image" "built: '${BUILT}', deploy pushes: '${DEPLOYED}'"
+    fi
+
+    if grep -q 'uses: mwaeckerlin/scratch/.github/workflows/docker-image.yml@master' .github/workflows/docker.yml \
+        && grep -q 'secrets: inherit' .github/workflows/docker.yml; then
+        _pass "workflow_calls_shared_build"
+    else
+        _fail "workflow_calls_shared_build" ".github/workflows/docker.yml does not call the shared docker-image workflow"
+    fi
 fi
 
 echo ""

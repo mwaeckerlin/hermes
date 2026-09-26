@@ -1,0 +1,6 @@
+services:
+  python-tests:
+    build:
+      context: ..
+      dockerfile: test/Dockerfile
+    network_mode: none
