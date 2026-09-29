@@ -104,6 +104,7 @@ Do not give the agent a secret: whatever you type into the chat is sent to the m
 - **The dashboard can read and change keys and configuration.** Whoever logs in on port 9119 can write `.env`, change `config.yaml` while the gateway runs, and reveal keys stored in `.env`. It requires a login (`HERMES_DASHBOARD_BASIC_AUTH_*`) and speaks plain HTTP: publish it only behind a TLS reverse proxy, or not at all.
 - **A configuration changed at runtime is checked at the next start only.** The isolation check runs in the entrypoint; a `config.yaml` edited through the dashboard takes effect before it. The sandbox's `sshd` still drops every variable, and `$HERMES_HOME` holds no key file to copy.
 - **The SSH key of the sandbox is in the gateway.** Whoever controls the gateway controls the sandbox; the key never reaches the sandbox or the agent.
+- **OpenCode without a password trusts its network.** The sandbox reaches the OpenCode server without a password, so every container on that network can hand OpenCode tasks, and OpenCode acts with its own model key. Only the agent sandboxes and OpenCode join that network (see [Development with OpenCode](#development-with-opencode)).
 
 ### Docker Secrets
 
@@ -261,6 +262,17 @@ Any Docker Secret is automatically available — no explicit mapping required.
 | Variable | Required | Description |
 |---|---|---|
 | `MCP_GITHUB_URL` | no (compose default) | MCP GitHub endpoint used by sandboxed sessions. Default in this setup: `http://mcp-github:4000`. The sandbox entrypoint exports it to `/etc/environment`, so the non-root SSH user can read it. |
+
+### Development with OpenCode
+
+The agent hands every software development task to the central [OpenCode](https://opencode.ai) server of the cluster, [mwaeckerlin/opencode](https://github.com/mwaeckerlin/opencode), which works in its own workspace and is tuned for exactly that. The sandbox carries the OpenCode client, taken from the image `mwaeckerlin/opencode:sandbox` so it matches the server's release, and the command `opencode-delegate "<task>"`, which the skill `opencode-delegation` tells the agent to use: it sends the task to OpenCode's HTTP API, waits until OpenCode is done, and prints the answer into the conversation, with the session id for a follow-up (`--session <id>`). `opencode run --attach` reaches the server as well, but in OpenCode 1.18 it prints no answer without a terminal.
+
+| Variable | Required | Description |
+|---|---|---|
+| `HERMES_OPENCODE_URL` | no | URL of the OpenCode server (port 4096), e.g. `http://opencode-sandbox:4096`; set on the sandbox service, whose entrypoint exports it to `/etc/environment`; empty: no delegation |
+| `HERMES_OPENCODE_TIMEOUT` | no | Seconds `opencode-delegate` waits for OpenCode's answer before it gives up with a message (default `7200`); set on the sandbox service like the URL |
+
+The sandbox reaches OpenCode directly, so it shares a network with the OpenCode server, and nothing else of the stack needs to. OpenCode's optional password (`OPENCODE_SERVER_PASSWORD_FILE` on the server) never belongs into the sandbox, because the agent could read it there. Without a password, whoever reaches port 4096 controls OpenCode, so the network between the sandboxes and OpenCode is joined by nothing else. Where that network is not closed, put a proxy in front of OpenCode that adds the password as HTTP basic auth (user `opencode`), and point `HERMES_OPENCODE_URL` at the proxy.
 
 ### LLM Providers
 

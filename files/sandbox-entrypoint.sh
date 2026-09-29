@@ -33,6 +33,13 @@ if [ -n "${MCP_GITHUB_URL:-}" ]; then
   echo "==== Setting MCP GitHub URL ===="
   echo "MCP_GITHUB_URL=${MCP_GITHUB_URL}" >> /etc/environment
 fi
+if [ -n "${HERMES_OPENCODE_URL:-}" ]; then
+  echo "==== Setting OpenCode URL ===="
+  echo "HERMES_OPENCODE_URL=${HERMES_OPENCODE_URL}" >> /etc/environment
+fi
+if [ -n "${HERMES_OPENCODE_TIMEOUT:-}" ]; then
+  echo "HERMES_OPENCODE_TIMEOUT=${HERMES_OPENCODE_TIMEOUT}" >> /etc/environment
+fi
 chown -R "${RUN_USER}:${RUN_GROUP}" "${RUN_HOME}"
 chmod 750 "${RUN_HOME}"
 chmod 700 "${RUN_HOME}/.ssh"

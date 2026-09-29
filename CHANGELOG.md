@@ -1,5 +1,9 @@
 # Changelog
 
+- 2026-09-29 **1.0.4**
+    - Development goes to OpenCode: the agent hands software development tasks to the central OpenCode server set in `HERMES_OPENCODE_URL` and reports its result; the sandbox carries the OpenCode client
+    - A delegation that gets no answer ends after `HERMES_OPENCODE_TIMEOUT` seconds (two hours by default) with a message, and an unreachable or refusing OpenCode server is named as such
+
 - 2026-09-29 **1.0.3**
     - Long-term memory with a self-hosted Hindsight server: the agent recalls and retains in its own memory bank and reaches a bank shared with other agents; everything is set from the environment, and the Hindsight key is optional
     - LiteLLM needs only its address; its key is optional, for a LiteLLM that needs none or a proxy that adds it

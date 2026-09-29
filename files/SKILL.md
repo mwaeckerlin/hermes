@@ -62,6 +62,7 @@ Mandatory:
 This deployment copies skills at sandbox startup into `~/.hermes/skills/`:
 
 - `/opt/hermes/skills/ssh-sandbox/SKILL.md`
+- `/opt/hermes/skills/opencode-delegation/SKILL.md`
 
 Verify installed copies:
 

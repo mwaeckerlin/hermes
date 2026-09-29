@@ -36,6 +36,16 @@ The sandbox toolset and SSH behaviour are tested end to end in the [mwaeckerlin/
 - **F2** `tests/isolation/dashboard_check.py` › dashboard_requires_login: the dashboard starts with the current hermes-agent and serves its pages behind the login.
 - **F13** `tests/isolation/test_agent_sees_no_secret.py` › test_agent_is_told_never_to_ask_for_a_secret: the system prompt the agent works with carries the rule never to ask for a secret and to warn first when the user offers one.
 
+## OpenCode Delegation
+
+`npm run test:opencode` builds the sandbox image and runs `tests/opencode-delegation.sh` against it. The OpenCode server runs from the same image; its model is the recording OpenAI-compatible endpoint of `tests/openai-stub.cjs`, which answers `pong`.
+
+- **F14** `tests/opencode-delegation.sh` › sandbox_has_opencode_client: the sandbox image carries the OpenCode client, `opencode-delegate` and the skill `opencode-delegation`.
+- **F14** `tests/opencode-delegation.sh` › stalled_server_ends_the_wait: against a server that takes the connection and never answers, `opencode-delegate` gives up after `HERMES_OPENCODE_TIMEOUT` seconds with exit code 4 and a message that names the timeout.
+- **F14** `tests/opencode-delegation.sh` › url_and_skill_reach_the_agent: the sandbox, started through its real entrypoint, writes `HERMES_OPENCODE_URL` and `HERMES_OPENCODE_TIMEOUT` into `/etc/environment` for the agent's SSH sessions and installs the skill into `~/.hermes/skills`.
+- **F14** `tests/opencode-delegation.sh` › task_delegated_and_answered: `opencode-delegate` hands a task to the OpenCode server, prints the answer and the session id, and continues that session with a follow-up that reaches OpenCode's model.
+- **F14** `tests/opencode-delegation.sh` › password_server_refuses_sandbox: a server with `OPENCODE_SERVER_PASSWORD` refuses the sandbox, which holds no password, with HTTP 401 and a clear message, and answers a client that has the password.
+
 ## Data Flow
 
 - **F12** `tests/test_isolation_check.py`: the gateway's start check passes the default configuration and MCP servers reached by `url`, and refuses `terminal.env_passthrough`, `terminal.credential_files` and an MCP server with `command`.
