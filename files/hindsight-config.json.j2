@@ -1,0 +1,9 @@
+{
+  "mode": "{{ HINDSIGHT_MODE | default('local_external', true) }}",
+  "api_url": "{{ HINDSIGHT_API_URL | default('http://localhost:8888', true) }}",
+  "bank_id": "{{ HINDSIGHT_BANK_ID | default('hermes', true) }}",
+  "memory_mode": "{{ HINDSIGHT_MEMORY_MODE | default('hybrid', true) }}",
+  "recall_budget": "{{ HINDSIGHT_BUDGET | default('mid', true) }}",
+  "retain_tags": "{{ HINDSIGHT_RETAIN_TAGS | default('', true) }}",
+  "retain_source": "{{ HINDSIGHT_RETAIN_SOURCE | default('', true) }}"
+}

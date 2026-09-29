@@ -84,8 +84,17 @@ fi
 if [ "$_ssh_key_from_secret" != "true" ]; then
   echo "Setting SSH private key from environment"
 fi
-mkdir -p "${HERMES_HOME}/.ssh"
-printf '%b' "${HERMES_SANDBOX_SSH_PRIVATE_KEY}" | tr -d '\r' > "${HERMES_HOME}/.ssh/hermes-sandbox"
+# The private key lives outside HERMES_HOME: hermes copies files from
+# HERMES_HOME into the sandbox when a skill asks for them
+# (required_credential_files), and HERMES_HOME/.ssh is not on its deny-list.
+# A key file an older image left in the volume is removed.
+_ssh_key_dir=/run/hermes-ssh
+mkdir -p "${_ssh_key_dir}" "${HERMES_HOME}/.ssh"
+rm -f "${HERMES_HOME}/.ssh/hermes-sandbox"
+printf '%b' "${HERMES_SANDBOX_SSH_PRIVATE_KEY}" | tr -d '\r' > "${_ssh_key_dir}/hermes-sandbox"
+chown -R hermes:hermes "${_ssh_key_dir}"
+chmod 700 "${_ssh_key_dir}"
+chmod 600 "${_ssh_key_dir}/hermes-sandbox"
 # Disable host key checking for the sandbox: the container gets a fresh host key
 # on every restart, so strict checking would always fail.  This is safe because
 # the sandbox is on a private Docker overlay network (gateway-sandbox) that is
@@ -95,20 +104,35 @@ cat > "${HERMES_HOME}/.ssh/config" <<EOF
 Host ${_ssh_host}
     StrictHostKeyChecking no
     UserKnownHostsFile /dev/null
-    IdentityFile ${HERMES_HOME}/.ssh/hermes-sandbox
+    IdentityFile ${_ssh_key_dir}/hermes-sandbox
 EOF
 chown -R hermes:hermes "${HERMES_HOME}/.ssh"
 chmod 700 "${HERMES_HOME}/.ssh"
-chmod 600 "${HERMES_HOME}/.ssh/hermes-sandbox"
 chmod 600 "${HERMES_HOME}/.ssh/config"
 # TERMINAL_SSH_KEY is the env var Hermes reads for the SSH private key path.
-export TERMINAL_SSH_KEY="${HERMES_HOME}/.ssh/hermes-sandbox"
+export TERMINAL_SSH_KEY="${_ssh_key_dir}/hermes-sandbox"
+# the key is on disk now; the agent's process does not carry it
+unset HERMES_SANDBOX_SSH_PRIVATE_KEY
 
 echo "==== Rendering Jinja2 Configuration ===="
 /opt/hermes/.venv/bin/python3 /render-config.py \
   /config.yaml.j2.default \
   "${HERMES_HOME}/config.yaml.rendered"
 echo "Configuration rendered to ${HERMES_HOME}/config.yaml.rendered"
+
+# The Hindsight memory provider reads its settings from this file and falls
+# back to its environment variables only where the file leaves a key out; the
+# file carries no key: the Hindsight key, where one is set, stays in the
+# environment as HINDSIGHT_API_KEY, or a proxy in front of the server adds it.
+if [ "${HERMES_MEMORY_PROVIDER:-}" = "hindsight" ]; then
+  mkdir -p "${HERMES_HOME}/hindsight"
+  /opt/hermes/.venv/bin/python3 /render-config.py \
+    /hindsight-config.json.j2 \
+    "${HERMES_HOME}/hindsight/config.json"
+  chown -R hermes:hermes "${HERMES_HOME}/hindsight"
+  echo "Hindsight: ${HINDSIGHT_MODE:-local_external} at ${HINDSIGHT_API_URL:-http://localhost:8888}, bank ${HINDSIGHT_BANK_ID:-hermes}, mode ${HINDSIGHT_MEMORY_MODE:-hybrid}"
+fi
+[ -n "${HINDSIGHT_SHARED_MCP_URL:-}" ] && echo "Hindsight shared bank as MCP server: ${HINDSIGHT_SHARED_MCP_URL}"
 
 echo "==== Rendered Hermes Configuration Summary ===="
 /opt/hermes/.venv/bin/python3 - <<'PY' "${HERMES_HOME}/config.yaml.rendered"
@@ -173,15 +197,9 @@ print(f"  human_delay.mode: {human_delay.get('mode', '(unset)')}")
 print(f"  delegation.max_iterations: {delegation.get('max_iterations', '(unset)')}")
 PY
 
-# LiteLLM uses the OpenAI wire protocol. The config template selects the
-# LiteLLM base_url; this runtime bridge supplies the API key to Hermes's
-# OpenAI-compatible transport without affecting rendered provider selection.
-if [ -n "$LITELLM_BASE_URL" ] && [ -n "$LITELLM_API_KEY" ] && \
-   [ -z "$OPENROUTER_API_KEY" ] && [ -z "$ANTHROPIC_API_KEY" ] && \
-   [ -z "$GOOGLE_API_KEY" ] && [ -z "$GEMINI_API_KEY" ] && [ -z "$OPENAI_API_KEY" ]; then
-  export OPENAI_API_KEY="${LITELLM_API_KEY}"
-  echo "LiteLLM API key bridged for OpenAI-compatible transport"
-fi
+# LITELLM_API_KEY stays in the environment: config.yaml names it with key_env
+# and hermes reads its value from here. It never reaches the sandbox, whose
+# sshd accepts no passed variable (tests/run-isolation.sh).
 
 echo "==== Configuring Hermes ===="
 # Copy the freshly rendered config to config.yaml when:
@@ -196,6 +214,7 @@ else
   echo "config.yaml preserved (OVERWRITE_CONFIG=false)"
 fi
 echo "Active config file: ${HERMES_HOME}/config.yaml"
+/opt/hermes/.venv/bin/python3 /check-isolation.py "${HERMES_HOME}/config.yaml"
 
 echo "==== Redirecting PID and Lock Files to /tmp ===="
 # gateway.pid and gateway.lock must not live in the persistent volume — stale
@@ -211,6 +230,15 @@ echo "==== Starting Hermes Gateway ===="
 # access to all API keys and secrets.  Force-disable it unconditionally so
 # that no caller-supplied environment variable can ever enable it.
 export HERMES_CODE_EXECUTION_ENABLED=false
+
+# The agent never asks for a secret: hermes prompts for a skill's missing
+# credentials only on interactive surfaces (HERMES_INTERACTIVE), so the gateway
+# never is one, and the standing instruction below sets the rule for the chat.
+# hermes appends HERMES_ENVIRONMENT_HINT to the system prompt; an operator's own
+# hint follows the rule.
+unset HERMES_INTERACTIVE
+_credential_rule="Credentials: you never hold a password, token, API key or private key. The gateway keeps them and your tools reach the services without showing them to you. Never ask the user for a password, token, API key or private key, and never suggest sending one. If the user offers or sends one, first warn that it becomes part of this conversation, which is sent to the model provider and stored in the history, and recommend revoking it; use it only if the user confirms after that warning."
+export HERMES_ENVIRONMENT_HINT="${_credential_rule}${HERMES_ENVIRONMENT_HINT:+ ${HERMES_ENVIRONMENT_HINT}}"
 
 # Fix ownership of the data directory (Hermes runs as uid 10000 / hermes).
 if [ "$(stat -c '%u' "${HERMES_HOME}")" != "10000" ]; then

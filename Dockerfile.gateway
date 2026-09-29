@@ -6,8 +6,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends openssh-client 
 COPY --chown=hermes:hermes files/SKILL.md /opt/hermes/skills/ssh-sandbox/SKILL.md
 ADD --chown=hermes:hermes https://github.com/mwaeckerlin/ai-agent-skills.git#master:skills /opt/hermes/skills/
 COPY --from=mcp_github_skills /app/skills/mcp-github /opt/hermes/skills/
+# Hindsight memory provider, at the commit the plugin catalog of this
+# hermes-agent pins.
+# SECURITY-WORKAROUND: hindsight-client is exempt from hermes' 14-day release
+# quarantine (exclude-newer in /opt/hermes/pyproject.toml): the plugin needs
+# >=0.10.1, published 2026-09-21, which the window hides until 2026-10-05.
+# Remove the exemption once 0.10.1 is older than 14 days. review: 2026-10-06
+COPY files/install-catalog-plugin.py /install-catalog-plugin.py
+RUN /opt/hermes/.venv/bin/python3 /install-catalog-plugin.py hindsight hindsight-client \
+ && chown -R hermes:hermes /opt/hermes/plugins/memory/hindsight \
+ && rm /install-catalog-plugin.py
 COPY files/config.yaml.j2 /config.yaml.j2.default
+COPY files/hindsight-config.json.j2 /hindsight-config.json.j2
 COPY files/render-config.py /render-config.py
+COPY files/check-isolation.py /check-isolation.py
 COPY --chmod=0755 files/gateway-entrypoint.sh /entrypoint.sh
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=60 \
   CMD /opt/hermes/.venv/bin/python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8642/healthz', timeout=5)"

@@ -77,6 +77,22 @@ services:
       ELEVENLABS_API_KEY:
       # Local TODO dashboard plugin storage override (optional)
       HERMES_TODO_FILE:
+      # ── Hindsight long-term memory (optional) ─────────────────────────────
+      # HERMES_MEMORY_PROVIDER=hindsight activates it. The Hindsight key is
+      # optional: set HINDSIGHT_API_KEY (ideally the Docker secret
+      # hindsight_api_key), or point HINDSIGHT_API_URL at a proxy that adds it.
+      HERMES_MEMORY_PROVIDER:
+      HINDSIGHT_API_KEY:
+      HINDSIGHT_MODE:
+      HINDSIGHT_API_URL:
+      HINDSIGHT_BANK_ID:
+      HINDSIGHT_MEMORY_MODE:
+      HINDSIGHT_BUDGET:
+      HINDSIGHT_RETAIN_TAGS:
+      HINDSIGHT_RETAIN_SOURCE:
+      HINDSIGHT_TIMEOUT:
+      # the bank shared with the other agents, as an MCP server
+      HINDSIGHT_SHARED_MCP_URL:
       # GitHub (Skills Hub + higher API rate limits)
       # GITHUB_TOKEN: Access through MCP
       # Groq (free-tier Whisper STT)
@@ -204,18 +220,27 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.dashboard
-    command: ["dashboard", "--host", "0.0.0.0", "--insecure"]
+    # hermes serves the dashboard on a non-loopback address only with a login
+    command: ["dashboard", "--host", "0.0.0.0"]
     depends_on:
       hermes-gateway:
         condition: service_started
     environment:
       HERMES_HOME: /opt/data
       GATEWAY_HEALTH_URL: http://hermes-gateway:8642
+      # login (required): a user name and a password hash, made with
+      # python3 -c "from plugins.dashboard_auth.basic import hash_password; print(hash_password('…'))"
+      # inside the image; HERMES_DASHBOARD_BASIC_AUTH_PASSWORD takes a plain
+      # password instead. The secret keeps sessions valid across restarts.
+      HERMES_DASHBOARD_BASIC_AUTH_USERNAME:
+      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD_HASH:
+      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD:
+      HERMES_DASHBOARD_BASIC_AUTH_SECRET:
     volumes:
       - hermes-data:/opt/data
     ports:
       - "9119:9119"
-    init: true
+    # no init: the image's own s6 init has to be PID 1
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped

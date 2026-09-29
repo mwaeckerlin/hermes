@@ -59,6 +59,9 @@ model:
   base_url: "{{ HERMES_MODEL_BASE_URL }}"
 {% elif LITELLM_BASE_URL | default('') %}
   base_url: "{{ LITELLM_BASE_URL }}"
+  # the name of the variable, never its value: hermes reads LITELLM_API_KEY
+  # from the gateway's environment, and config.yaml on the volume holds no key
+  key_env: "LITELLM_API_KEY"
 {% elif OPENAI_API_KEY | default('') and not (LITELLM_BASE_URL | default('') or OPENROUTER_API_KEY | default('') or ANTHROPIC_API_KEY | default('') or GOOGLE_API_KEY | default('') or GEMINI_API_KEY | default('')) %}
   base_url: "https://api.openai.com/v1"
 {% endif %}
@@ -79,10 +82,13 @@ terminal:
   ssh_host: "{{ HERMES_TERMINAL_SSH_HOST | default('hermes-sandbox') }}"
   ssh_user: "{{ HERMES_TERMINAL_SSH_USER | default('somebody') }}"
   ssh_port: {{ HERMES_TERMINAL_SSH_PORT | default('22', true) | int }}
-  # SSH key is written to $HERMES_HOME/.ssh/hermes-sandbox by entrypoint.sh;
+  # SSH key is written to /run/hermes-ssh/hermes-sandbox by entrypoint.sh;
   # use the absolute path from TERMINAL_SSH_KEY (set before rendering) so that
   # tilde-expansion to the hermes user's home directory does not break lookups.
   ssh_key: "{{ TERMINAL_SSH_KEY }}"
+  # no variable and no file of the gateway is handed to the sandbox
+  env_passthrough: []
+  credential_files: []
   cwd: "~"
   timeout: {{ HERMES_TERMINAL_TIMEOUT | default('180', true) | int }}
   lifetime_seconds: {{ HERMES_TERMINAL_LIFETIME | default('300', true) | int }}
@@ -134,6 +140,7 @@ auxiliary:
 {% elif LITELLM_BASE_URL | default('') %}
     base_url: "{{ LITELLM_BASE_URL }}"
     model: "{{ LITELLM_DEFAULT_MODEL | default('gpt-4o-mini') }}"
+    key_env: "LITELLM_API_KEY"
 {% else %}
     provider: "auto"
 {% endif %}
@@ -155,6 +162,7 @@ auxiliary:
 {% elif LITELLM_BASE_URL | default('') %}
     base_url: "{{ LITELLM_BASE_URL }}"
     model: "{{ HERMES_VISION_MODEL | default(LITELLM_DEFAULT_MODEL | default('gpt-4o')) }}"
+    key_env: "LITELLM_API_KEY"
 {% else %}
     provider: "{{ HERMES_VISION_PROVIDER | default('auto') }}"
 {% if HERMES_VISION_MODEL | default('') %}
@@ -176,6 +184,9 @@ auxiliary:
 memory: {{ HERMES_MEMORY_YAML }}
 {% else %}
 memory:
+{% if HERMES_MEMORY_PROVIDER | default('') %}
+  provider: "{{ HERMES_MEMORY_PROVIDER }}"
+{% endif %}
   memory_enabled: {{ HERMES_MEMORY_ENABLED | default('true') }}
   user_profile_enabled: {{ HERMES_USER_PROFILE_ENABLED | default('true') }}
   memory_char_limit: {{ HERMES_MEMORY_CHAR_LIMIT | default('2200', true) | int }}
@@ -355,8 +366,17 @@ delegation:
 # =============================================================================
 # MCP Servers (Model Context Protocol)
 # =============================================================================
+{% if HERMES_MCP_SERVERS_YAML | default('') or HINDSIGHT_SHARED_MCP_URL | default('') %}
+mcp_servers:
+{% if HINDSIGHT_SHARED_MCP_URL | default('') %}
+  # the Hindsight memory bank shared with the other agents
+  hindsight-shared:
+    url: "{{ HINDSIGHT_SHARED_MCP_URL }}"
+{% endif %}
 {% if HERMES_MCP_SERVERS_YAML | default('') %}
-mcp_servers: {{ HERMES_MCP_SERVERS_YAML }}
+  # YAML merge key: the servers of HERMES_MCP_SERVERS_YAML join the ones above
+  <<: {{ HERMES_MCP_SERVERS_YAML }}
+{% endif %}
 {% endif %}
 
 # =============================================================================

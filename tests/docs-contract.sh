@@ -72,6 +72,22 @@ else
     _pass "no_skipped_tests"
 fi
 
+# a documented security workaround carries its review date and turns this
+# guard red once the date has passed, so it is removed or renewed on purpose
+TODAY=$(date +%F)
+OVERDUE=$(grep -rn --exclude-dir=node_modules --exclude-dir=.git --exclude=docs-contract.sh 'SECURITY-WORKAROUND:' . \
+    | while IFS= read -r hit; do
+        file=${hit%%:*}; rest=${hit#*:}; line=${rest%%:*}
+        review=$(sed -n "${line},\$p" "$file" | grep -m1 -oE 'review: [0-9]{4}-[0-9]{2}-[0-9]{2}' | cut -d' ' -f2)
+        if [[ -z "$review" ]]; then echo "$file:$line has no review date"
+        elif [[ "$review" < "$TODAY" ]]; then echo "$file:$line review date $review passed"; fi
+      done)
+if [[ -n "${OVERDUE}" ]]; then
+    _fail "security_workarounds_reviewed" "${OVERDUE}"
+else
+    _pass "security_workarounds_reviewed"
+fi
+
 echo ""
 echo "==> Docs contract results: ${PASS} passed, ${FAIL} failed"
 if [[ ${FAIL} -gt 0 ]]; then

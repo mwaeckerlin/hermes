@@ -1,6 +1,6 @@
 {
   "name": "@mwaeckerlin/hermes",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Secure sandboxed NousResearch Hermes agent with SSH-isolated Ubuntu sandbox and Docker-in-Docker support",
   "scripts": {
     "build": "docker compose build",
@@ -10,10 +10,12 @@
     "start:dev": "docker compose up --build --force-recreate --remove-orphans",
     "stop": "docker compose down",
     "deploy": "docker compose push hermes-dashboard hermes-gateway hermes-sandbox",
-    "test": "npm run test:docs && npm run test:unit && npm run test:python && npm run test:compose",
+    "test": "npm run test:docs && npm run test:unit && npm run test:python && npm run test:e2e && npm run test:isolation && npm run test:compose",
     "test:docs": "bash tests/docs-contract.sh",
     "test:unit": "npm --prefix files/todo-plugin ci && npm --prefix files/todo-plugin test && npm --prefix files/pairing-plugin ci && npm --prefix files/pairing-plugin test",
     "test:python": "docker compose -f test/docker-compose.yml run --rm --build python-tests",
+    "test:e2e": "bash tests/run-e2e.sh",
+    "test:isolation": "bash tests/run-isolation.sh",
     "test:compose": "bash tests/compose-contract.sh"
   }
 }

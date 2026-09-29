@@ -1,6 +1,8 @@
 # Simple Secure Hermes in SSH Sandbox
 
-Combine Hermes with security and ease of use! Run a fully sandboxed [NousResearch Hermes agent](https://github.com/NousResearch/hermes-agent) out of the box — locally or in a cloud.
+The AI agent never gets a token, a key or a password. The gateway keeps every credential, the agent's commands and files run in a separate sandbox container that holds none, and the agent is instructed never to ask you for one. An end-to-end test proves it on every build: it puts a marker value into every secret the gateway knows, lets the real agent search the sandbox for them the way a hostile model would, and fails on the first marker it finds (see [Secrets and the Agent](#secrets-and-the-agent)).
+
+Run a fully sandboxed [NousResearch Hermes agent](https://github.com/NousResearch/hermes-agent) out of the box — locally or in a cloud.
 
 A sandboxed Hermes runs after these steps:
 
@@ -80,7 +82,30 @@ The primary security mechanism is **strict isolation**: the AI runs in a dedicat
 - **Network encryption** (production) — encrypt overlay networks when deploying to Docker Swarm: set `networks.<name>.driver_opts.encrypted: "true"` on each network, or add a service mesh.
 - **Minimal port exposure** — only port 9119 (dashboard) is published. The gateway port 8642 is internal only, reachable solely via the `dashboard-gateway` network. If you use a chat platform such as Telegram you can close port 9119 as well. *Do not expose port 9119 to the Internet without a TLS reverse proxy and authentication.*
 
-### Secrets
+### Secrets and the Agent
+
+The model decides what the agent does, so the agent is treated as untrusted: nothing it can run or read holds a secret. The gateway, which holds them, keeps them away from the agent on every path hermes offers:
+
+- **Commands and files** — the agent's terminal and file tools run in the sandbox over SSH; local code execution in the gateway is switched off.
+- **Variables** — hermes can hand gateway variables to the sandbox (a skill's `required_environment_variables`, `terminal.env_passthrough`). It sends them with SSH `SendEnv`, and the sandbox's `sshd` accepts no such variable. The entrypoint also drops `HERMES_SANDBOX_SSH_PRIVATE_KEY` from the environment once it has written the key file.
+- **Files** — hermes can copy files from `$HERMES_HOME` into the sandbox (a skill's `required_credential_files`, `terminal.credential_files`). The SSH private key therefore lives in `/run/hermes-ssh`, outside `$HERMES_HOME`; `.env` and `auth.json` are on hermes' own deny-list.
+- **Configuration** — the gateway refuses to start when `terminal.env_passthrough` or `terminal.credential_files` is set, or when an MCP server would run inside the gateway (`command`); MCP servers run in containers of their own and are reached by `url`.
+- **Chat** — hermes asks for a skill's missing credential only on interactive surfaces, which the gateway never is. A standing instruction (`HERMES_ENVIRONMENT_HINT`) tells the agent never to ask for a password, token, API key or private key, and, when you offer or send one, to warn you first that it becomes part of the conversation, which goes to the model provider and into the history.
+- **Dashboard** — the sandbox shares no network with the dashboard, so the agent cannot reach its key and configuration pages.
+
+`npm run test:isolation` proves all of this against the real images (see [Development](#development)).
+
+Do not give the agent a secret: whatever you type into the chat is sent to the model provider and stored in the conversation history. If you have sent one, revoke it.
+
+### Remaining Risks
+
+- **The gateway holds the secrets.** Every channel token and API key the gateway needs sits in its process. hermes' own code uses them; a flaw in hermes, in a plugin or in a dependency of the gateway image can expose them without the agent's help.
+- **The rule against asking for secrets is an instruction.** A model can disregard it and ask anyway; nothing technical stops a question in the chat. The isolation stops a secret from reaching the agent unless you send it yourself.
+- **The dashboard can read and change keys and configuration.** Whoever logs in on port 9119 can write `.env`, change `config.yaml` while the gateway runs, and reveal keys stored in `.env`. It requires a login (`HERMES_DASHBOARD_BASIC_AUTH_*`) and speaks plain HTTP: publish it only behind a TLS reverse proxy, or not at all.
+- **A configuration changed at runtime is checked at the next start only.** The isolation check runs in the entrypoint; a `config.yaml` edited through the dashboard takes effect before it. The sandbox's `sshd` still drops every variable, and `$HERMES_HOME` holds no key file to copy.
+- **The SSH key of the sandbox is in the gateway.** Whoever controls the gateway controls the sandbox; the key never reaches the sandbox or the agent.
+
+### Docker Secrets
 
 - **Docker Secrets** (production) — use `docker secret` instead of environment variables. The gateway entrypoint reads every file in `/run/secrets/`, uppercases the filename, and exports it as an environment variable. Example: `/run/secrets/hermes_sandbox_ssh_private_key` → `HERMES_SANDBOX_SSH_PRIVATE_KEY`.
 
@@ -180,6 +205,15 @@ GOOGLE_API_KEY=AIza...
 
 The rendered configuration auto-selects the default model from whichever key is set (priority: OpenAI → OpenRouter → Anthropic → Google → LiteLLM). Override with `HERMES_DEFAULT_MODEL`.
 
+The dashboard needs a login; hermes refuses to serve it on the network without one. Add a user name and a password to `.env`:
+
+```bash
+HERMES_DASHBOARD_BASIC_AUTH_USERNAME=admin
+HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=[YOUR-DASHBOARD-PASSWORD]
+```
+
+For production, give `HERMES_DASHBOARD_BASIC_AUTH_PASSWORD_HASH` instead of the password, made with `docker compose run --rm --entrypoint /opt/hermes/.venv/bin/python3 hermes-dashboard -c "from plugins.dashboard_auth.basic import hash_password; print(hash_password('…'))"`, and a fixed `HERMES_DASHBOARD_BASIC_AUTH_SECRET` so sessions survive a restart.
+
 ### 2. Start
 
 `npm start` runs the stack in the foreground and shows the logs as they arrive:
@@ -243,6 +277,8 @@ All optional — configure one or more. If none is set the gateway exits with a
 | `LITELLM_DEFAULT_MODEL` | Default model served by LiteLLM (default: `~moonshotai/kimi-latest`) |
 | `HERMES_DEFAULT_MODEL` | Override auto-selected default (e.g. `anthropic/claude-opus-4.6`) |
 
+`LITELLM_API_KEY` is optional; give a scoped LiteLLM key, ideally as the Docker secret `litellm_api_key`. The gateway sends it with every request, and it never reaches the agent (see [Secrets and the Agent](#secrets-and-the-agent)). Without it, hermes sends the fixed placeholder `Authorization: Bearer no-key-required`, for a LiteLLM that needs no key or a proxy in front of it that sets the header.
+
 > **OpenRouter — model ID naming**
 >
 > Hermes routes OpenRouter requests by calling `https://openrouter.ai/api/v1`
@@ -268,6 +304,25 @@ All optional — configure one or more. If none is set the gateway exits with a
 >
 > Override with `HERMES_DEFAULT_MODEL=<openai-model-id>` if the OpenAI account
 > should use a different model.
+
+### Hindsight Long-Term Memory
+
+[Hindsight](https://github.com/vectorize-io/hindsight) is a self-hosted agent memory. The gateway image carries its hermes memory provider at the commit the hermes-agent plugin catalog pins. With `HERMES_MEMORY_PROVIDER=hindsight` the agent recalls from and retains into its own memory bank on every turn and gets the tools `hindsight_retain`, `hindsight_recall` and `hindsight_reflect`. A second bank, shared with other agents, joins as an MCP server.
+
+| Variable | Default | Description |
+|---|---|---|
+| `HERMES_MEMORY_PROVIDER` | — | `hindsight` activates the provider |
+| `HINDSIGHT_API_URL` | `http://localhost:8888` | Hindsight server, or the proxy in front of it |
+| `HINDSIGHT_MODE` | `local_external` | `local_external` for a self-hosted server; `cloud` for Hindsight Cloud |
+| `HINDSIGHT_BANK_ID` | `hermes` | The agent's own memory bank |
+| `HINDSIGHT_MEMORY_MODE` | `hybrid` | `hybrid` (automatic recall and retain plus tools), `context` (automatic only) or `tools` (tools only) |
+| `HINDSIGHT_BUDGET` | `mid` | Recall thoroughness: `low`, `mid`, `high` |
+| `HINDSIGHT_RETAIN_TAGS` | — | Tags on every retained memory, comma-separated |
+| `HINDSIGHT_RETAIN_SOURCE` | — | `metadata.source` on every retained memory |
+| `HINDSIGHT_TIMEOUT` | `120` | Seconds per request |
+| `HINDSIGHT_SHARED_MCP_URL` | — | MCP endpoint of the shared bank, `http://<server>:8888/mcp/<bank>/`; rendered into `mcp_servers` as `hindsight-shared`, beside the servers of `HERMES_MCP_SERVERS_YAML` |
+
+The gateway entrypoint writes these settings to `$HERMES_HOME/hindsight/config.json` on every start. The file never holds a key. The Hindsight key (the server's `HINDSIGHT_API_TENANT_API_KEY`) is optional: give it to the gateway as `HINDSIGHT_API_KEY`, ideally as the Docker secret `hindsight_api_key`, or put a proxy in front of the server that adds `Authorization: Bearer <key>`. Either way it never reaches the agent.
 
 ### Messaging Channels
 
@@ -488,9 +543,13 @@ The gateway renders `files/config.yaml.j2` (Jinja2 template) into `/opt/data/con
 
 Example — add an MCP server:
 
+The MCP server runs in a container of its own and is reached by its `url`:
+
 ```bash
-HERMES_MCP_SERVERS_YAML='{"time":{"command":"uvx","args":["mcp-server-time"]}}'
+HERMES_MCP_SERVERS_YAML='{"time":{"url":"http://mcp-time:8000/mcp"}}'
 ```
+
+A server with `command` would run inside the gateway, with the gateway's secrets in its environment; the gateway refuses to start with one (see [Security Model](#security-model)).
 
 Example — restrict platform toolsets:
 
@@ -595,7 +654,15 @@ $ npm test           # the whole suite, after the build
 $ npm run build:doc  # regenerate the diagrams in doc/ from this README
 ```
 
-`npm test` runs the register guard (`tests/docs-contract.sh`), the frontend tests of the TODO and pairing plugins, the Python tests inside the built dashboard image (`test/docker-compose.yml`: config rendering, TODO storage and API, pairing API) and the compose wiring contract (`tests/compose-contract.sh`). The Python tests run against the built images, so `npm run build` comes first.
+`npm test` runs the register guard (`tests/docs-contract.sh`), the frontend tests of the TODO and pairing plugins, the Python tests inside an image built from the gateway image (`test/docker-compose.yml`: config rendering, TODO storage and API, pairing API, a LiteLLM request without a key), the Hindsight memory end to end against a real Hindsight server, once behind a key-adding proxy and once with the key in the gateway (`tests/run-e2e.sh`), the isolation end to end that lets the real agent search for planted secrets (`tests/run-isolation.sh`), and the compose wiring contract (`tests/compose-contract.sh`). The Python tests run against the built images, so `npm run build` comes first.
+
+The Hindsight server of the end-to-end test logs one warning that belongs to its own image: its reranker model `cross-encoder/ms-marco-MiniLM-L-6-v2` ships misaligned tensors, which Hindsight copies out of memory-mapped storage at start so its scores stay correct. Nothing in this repository causes or can remove it; every other warning fails the run.
+
+### Security Workarounds
+
+| Where | What | Removed when |
+|---|---|---|
+| `Dockerfile.gateway` | `hindsight-client` is exempt from hermes' 14-day release quarantine (`exclude-newer` in the hermes-agent `pyproject.toml`); the Hindsight plugin needs 0.10.1, published 2026-09-21. Its own dependencies stay under the quarantine. | 0.10.1 is older than 14 days, from 2026-10-05; `tests/docs-contract.sh` turns red after the review date 2026-10-06 |
 
 ### Images and Tags
 

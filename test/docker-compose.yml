@@ -1,6 +1,212 @@
+# own project name: the directory name `test` is shared with the test stacks
+# of other repositories, whose containers then show up as orphans here
+name: hermes-test
+
 services:
+  # tests without a network: configuration, plugins, LiteLLM request
   python-tests:
     build:
       context: ..
       dockerfile: test/Dockerfile
+    image: hermes-test
+    command: ["tests", "--ignore=tests/e2e", "--ignore=tests/e2e_key", "--ignore=tests/isolation"]
     network_mode: none
+
+  # Hindsight memory end to end: a real Hindsight server that demands a key,
+  # a proxy in front of it that adds the key, and the hermes test container,
+  # which holds no key and reaches the server through the proxy
+  hindsight-e2e:
+    build:
+      context: ..
+      dockerfile: test/Dockerfile
+    image: hermes-test
+    command: ["tests/e2e"]
+    environment:
+      HINDSIGHT_TEST_PROXY_URL: http://hindsight-proxy:8888
+      HINDSIGHT_TEST_DIRECT_URL: http://hindsight:8888
+    depends_on:
+      hindsight-proxy:
+        condition: service_started
+      hindsight:
+        condition: service_healthy
+    networks:
+      - agent-proxy
+      - proxy-hindsight
+
+  # the Hindsight key held by the gateway (a Docker secret in production),
+  # straight to the server
+  hindsight-e2e-key:
+    image: hermes-test
+    command: ["tests/e2e_key"]
+    environment:
+      HINDSIGHT_TEST_DIRECT_URL: http://hindsight:8888
+      HINDSIGHT_API_KEY: hermes-e2e-proxy-key
+    depends_on:
+      hindsight:
+        condition: service_healthy
+    networks:
+      - proxy-hindsight
+
+  # the gateway image with its real entrypoint: renders hindsight/config.json
+  # from the environment and reports the active memory provider
+  gateway-memory-status:
+    image: mwaeckerlin/hermes:gateway
+    command: ["memory", "status"]
+    # as the gateway service of docker-compose.yml
+    init: true
+    environment:
+      HERMES_SANDBOX_SSH_PRIVATE_KEY: not-a-real-key
+      LITELLM_BASE_URL: http://litellm-proxy:4000/v1
+      HERMES_MEMORY_PROVIDER: hindsight
+      HINDSIGHT_API_URL: http://hindsight-proxy:8888
+      HINDSIGHT_BANK_ID: hermes-start
+    network_mode: none
+
+  # isolation: the real gateway with a secret in every variable it knows,
+  # the real sandbox, and a scripted model that drives the agent to every
+  # secret it could reach (tests/isolation/scripted_model.py)
+  isolation-model:
+    image: hermes-test
+    entrypoint: ["/opt/hermes/.venv/bin/python3", "tests/isolation/scripted_model.py"]
+    environment:
+      PROBE_VARIABLES: &probe-variables >-
+        HINDSIGHT_API_KEY LITELLM_API_KEY TELEGRAM_BOT_TOKEN
+        DISCORD_BOT_TOKEN SLACK_BOT_TOKEN SLACK_APP_TOKEN GITHUB_TOKEN ELEVENLABS_API_KEY EXA_API_KEY
+        TAVILY_API_KEY FAL_KEY BROWSERBASE_API_KEY GROQ_API_KEY VOICE_TOOLS_OPENAI_KEY
+        TOOL_GATEWAY_USER_TOKEN FIRECRAWL_API_KEY PARALLEL_API_KEY
+      PROBE_KEY_MARKER: ${PROBE_KEY_MARKER:-}
+    volumes:
+      - isolation-records:/records
+    networks:
+      - isolation-model
+
+  isolation-sandbox:
+    image: mwaeckerlin/hermes:sandbox
+    hostname: hermes-sandbox
+    environment:
+      HERMES_SANDBOX_SSH_PUBLIC_KEY: ${PROBE_PUBLIC_KEY:-}
+    networks:
+      isolation-sandbox:
+        aliases: [hermes-sandbox]
+
+  isolation-gateway:
+    # ISOLATION_GATEWAY_IMAGE runs the same test against another build
+    image: ${ISOLATION_GATEWAY_IMAGE:-mwaeckerlin/hermes:gateway}
+    init: true
+    command: ["-z", "Run the deployment check."]
+    depends_on: [isolation-model, isolation-sandbox]
+    environment:
+      HERMES_SANDBOX_SSH_PRIVATE_KEY: ${PROBE_PRIVATE_KEY:-}
+      LITELLM_BASE_URL: http://isolation-model:8000/v1
+      LITELLM_DEFAULT_MODEL: scripted
+      # a terminal section to try against the gateway (tests/run-isolation.sh)
+      HERMES_TERMINAL_YAML: ${ISOLATION_TERMINAL_YAML:-}
+      HINDSIGHT_API_KEY: hermes-canary-hindsight_api_key
+      LITELLM_API_KEY: hermes-canary-litellm_api_key
+      TELEGRAM_BOT_TOKEN: hermes-canary-telegram_bot_token
+      DISCORD_BOT_TOKEN: hermes-canary-discord_bot_token
+      SLACK_BOT_TOKEN: hermes-canary-slack_bot_token
+      SLACK_APP_TOKEN: hermes-canary-slack_app_token
+      GITHUB_TOKEN: hermes-canary-github_token
+      ELEVENLABS_API_KEY: hermes-canary-elevenlabs_api_key
+      EXA_API_KEY: hermes-canary-exa_api_key
+      TAVILY_API_KEY: hermes-canary-tavily_api_key
+      FAL_KEY: hermes-canary-fal_key
+      BROWSERBASE_API_KEY: hermes-canary-browserbase_api_key
+      GROQ_API_KEY: hermes-canary-groq_api_key
+      VOICE_TOOLS_OPENAI_KEY: hermes-canary-voice_tools_openai_key
+      TOOL_GATEWAY_USER_TOKEN: hermes-canary-tool_gateway_user_token
+      FIRECRAWL_API_KEY: hermes-canary-firecrawl_api_key
+      PARALLEL_API_KEY: hermes-canary-parallel_api_key
+    volumes:
+      - isolation-data:/opt/data
+    networks:
+      - isolation-model
+      - isolation-sandbox
+      - isolation-dashboard
+
+  # the dashboard as in docker-compose.yml: shares the data volume and a
+  # network with the gateway, never one with the sandbox
+  isolation-dashboard:
+    image: mwaeckerlin/hermes:dashboard
+    hostname: hermes-dashboard
+    command: ["dashboard", "--host", "0.0.0.0"]
+    environment:
+      HERMES_HOME: /opt/data
+      HERMES_DASHBOARD_BASIC_AUTH_USERNAME: isolation-admin
+      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: isolation-dashboard-password
+      HERMES_DASHBOARD_BASIC_AUTH_SECRET: isolation-dashboard-session-secret
+    volumes:
+      - isolation-data:/opt/data
+    networks:
+      isolation-dashboard:
+        aliases: [hermes-dashboard]
+
+  isolation-check:
+    image: hermes-test
+    # -s: the probe's tool results stay in the log as evidence
+    command: ["tests/isolation", "-s"]
+    environment:
+      PROBE_VARIABLES: *probe-variables
+      PROBE_PRIVATE_KEY: ${PROBE_PRIVATE_KEY:-}
+    volumes:
+      - isolation-records:/records
+    network_mode: none
+
+  hindsight-proxy:
+    image: nginx:alpine
+    configs:
+      - source: hindsight-proxy
+        target: /etc/nginx/conf.d/default.conf
+    networks:
+      - agent-proxy
+      - proxy-hindsight
+
+  hindsight:
+    image: ghcr.io/vectorize-io/hindsight:latest
+    environment:
+      HINDSIGHT_API_HOST: 0.0.0.0
+      HINDSIGHT_API_PORT: "8888"
+      # the mock LLM derives facts from the stored text, no LLM key needed
+      HINDSIGHT_API_LLM_PROVIDER: mock
+      HINDSIGHT_API_LLM_MODEL: mock-model
+      HINDSIGHT_API_TENANT_EXTENSION: hindsight_api.extensions.builtin.tenant:ApiKeyTenantExtension
+      HINDSIGHT_API_TENANT_API_KEY: hermes-e2e-proxy-key
+      # a stable worker id, else Hindsight warns that it derives one from the
+      # container hostname
+      HINDSIGHT_API_WORKER_ID: hindsight
+    healthcheck:
+      # the image carries no curl; its python answers the health probe
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8888/health', timeout=5)"]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 60s
+    networks:
+      - proxy-hindsight
+
+configs:
+  hindsight-proxy:
+    content: |
+      server {
+        listen 8888;
+        location / {
+          proxy_pass http://hindsight:8888;
+          proxy_http_version 1.1;
+          proxy_buffering off;
+          proxy_read_timeout 300s;
+          proxy_set_header Host $$host;
+          proxy_set_header Authorization "Bearer hermes-e2e-proxy-key";
+        }
+      }
+
+networks:
+  agent-proxy:
+  proxy-hindsight:
+  isolation-model:
+  isolation-sandbox:
+  isolation-dashboard:
+
+volumes:
+  isolation-records:
+  isolation-data:
