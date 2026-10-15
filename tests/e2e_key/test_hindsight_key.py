@@ -1,6 +1,7 @@
 """Hermes' Hindsight memory with the Hindsight key held by the gateway
 (HINDSIGHT_API_KEY, from a Docker secret in production) against the real
-server directly, while hindsight/config.json stays without a key."""
+server directly, while hindsight/config.json stays without a key. The plugin
+is installed into HERMES_HOME as the gateway entrypoint installs it."""
 
 import json
 import os
@@ -15,17 +16,17 @@ HINDSIGHT = ROOT / "files" / "hindsight-config.json.j2"
 SERVER = os.environ["HINDSIGHT_TEST_DIRECT_URL"]
 
 
-def test_retain_and_recall_with_the_key_in_the_environment(tmp_path, monkeypatch):
+def test_retain_and_recall_with_the_key_in_the_environment():
     key = os.environ["HINDSIGHT_API_KEY"]
     assert key
     bank = f"hermes-key-{uuid.uuid4().hex[:8]}"
-    home = tmp_path / "home"
-    (home / "hindsight").mkdir(parents=True)
+    # the home the plugin was installed into (test/Dockerfile): its dependencies live there
+    home = Path(os.environ["HERMES_HOME"])
+    (home / "hindsight").mkdir(parents=True, exist_ok=True)
     env = dict(os.environ, HINDSIGHT_API_URL=SERVER, HINDSIGHT_BANK_ID=bank)
     subprocess.run([os.sys.executable, str(RENDER), str(HINDSIGHT), str(home / "hindsight" / "config.json")],
                    check=True, cwd=ROOT, env=env, capture_output=True, text=True)
     assert key not in (home / "hindsight" / "config.json").read_text()
-    monkeypatch.setenv("HERMES_HOME", str(home))
     from plugins.memory import load_memory_provider
     memory = load_memory_provider("hindsight")
     memory.initialize(session_id=f"session-{bank}", hermes_home=str(home), platform="cli")

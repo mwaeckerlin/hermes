@@ -137,11 +137,11 @@ fi
 echo "==== Rendered Hermes Configuration Summary ===="
 /opt/hermes/.venv/bin/python3 - <<'PY' "${HERMES_HOME}/config.yaml.rendered"
 import sys
-import yaml
+from ruamel.yaml import YAML
 
 path = sys.argv[1]
 with open(path) as fh:
-    cfg = yaml.safe_load(fh) or {}
+    cfg = YAML(typ="safe").load(fh) or {}
 
 def get(mapping, *path, default=None):
     cur = mapping
@@ -252,8 +252,7 @@ fi
 # no PAM, no login session) so every variable exported above is inherited.
 # gosu/su are NOT used here because both can silently clear env vars after a
 # setuid() call in certain Docker/kernel configurations.
-echo "Dropping root privileges"
-exec /opt/hermes/.venv/bin/python3 -c "
+_as_hermes="
 import os, sys, pwd, grp
 p = pwd.getpwnam('hermes')
 groups = list({g.gr_gid for g in grp.getgrall() if p.pw_name in g.gr_mem} | {p.pw_gid})
@@ -266,4 +265,22 @@ os.environ['HOME'] = p.pw_dir
 os.environ['USER'] = p.pw_name
 os.environ['LOGNAME'] = p.pw_name
 os.execv(sys.argv[1], sys.argv[1:])
-" /opt/hermes/.venv/bin/hermes "$@"
+"
+
+# Hindsight left the hermes core: its memory provider is a catalog plugin that
+# hermes installs into the data volume, at the commit its catalog pins, with
+# its Python dependencies in the volume's own environment. This is the install
+# hermes documents for Docker entrypoints; it needs GitHub and PyPI once, on
+# the first start with a fresh volume. Without the provider the agent would
+# run without its memory, so a failed install stops the start.
+if [ "${HERMES_MEMORY_PROVIDER:-}" = "hindsight" ] && [ ! -d "${HERMES_HOME}/plugins/hindsight" ]; then
+  echo "==== Installing the Hindsight memory provider ===="
+  if ! /opt/hermes/.venv/bin/python3 -c "${_as_hermes}" /opt/hermes/.venv/bin/hermes \
+      plugins install hindsight --yes-deps --enable; then
+    echo "ERROR: the Hindsight memory provider could not be installed; the gateway needs GitHub and PyPI on its first start with HERMES_MEMORY_PROVIDER=hindsight" >&2
+    exit 1
+  fi
+fi
+
+echo "Dropping root privileges"
+exec /opt/hermes/.venv/bin/python3 -c "${_as_hermes}" /opt/hermes/.venv/bin/hermes "$@"

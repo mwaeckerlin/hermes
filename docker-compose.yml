@@ -232,6 +232,8 @@ services:
       # python3 -c "from plugins.dashboard_auth.basic import hash_password; print(hash_password('…'))"
       # inside the image; HERMES_DASHBOARD_BASIC_AUTH_PASSWORD takes a plain
       # password instead. The secret keeps sessions valid across restarts.
+      # Each of them can come as a Docker secret of the lower-case name
+      # instead (hermes_dashboard_basic_auth_password, …).
       HERMES_DASHBOARD_BASIC_AUTH_USERNAME:
       HERMES_DASHBOARD_BASIC_AUTH_PASSWORD_HASH:
       HERMES_DASHBOARD_BASIC_AUTH_PASSWORD:

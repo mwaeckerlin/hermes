@@ -4,4 +4,4 @@ One line per task, newest on top: date, status, who asked. An entry is removed w
 
 ## Maintainer
 
-Nothing open.
+- 2026-10-15 · waits for Marc's decision · the current hermes resolves the Hindsight plugin's Python dependencies without the 14-day waiting period: accept (README, Remaining Risks), pin them, or leave Hindsight out

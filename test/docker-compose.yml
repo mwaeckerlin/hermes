@@ -60,7 +60,7 @@ services:
       HERMES_MEMORY_PROVIDER: hindsight
       HINDSIGHT_API_URL: http://hindsight-proxy:8888
       HINDSIGHT_BANK_ID: hermes-start
-    network_mode: none
+    # the first start installs the Hindsight plugin from GitHub and PyPI
 
   # isolation: the real gateway with a secret in every variable it knows,
   # the real sandbox, and a scripted model that drives the agent to every
@@ -134,8 +134,10 @@ services:
     environment:
       HERMES_HOME: /opt/data
       HERMES_DASHBOARD_BASIC_AUTH_USERNAME: isolation-admin
-      HERMES_DASHBOARD_BASIC_AUTH_PASSWORD: isolation-dashboard-password
-      HERMES_DASHBOARD_BASIC_AUTH_SECRET: isolation-dashboard-session-secret
+    # password and session secret come as Docker secrets only, as in a swarm
+    secrets:
+      - hermes_dashboard_basic_auth_password
+      - hermes_dashboard_basic_auth_secret
     volumes:
       - isolation-data:/opt/data
     networks:
@@ -199,6 +201,13 @@ configs:
           proxy_set_header Authorization "Bearer hermes-e2e-proxy-key";
         }
       }
+
+# the dashboard's login, filled by tests/run-isolation.sh for this run only
+secrets:
+  hermes_dashboard_basic_auth_password:
+    environment: ISOLATION_DASHBOARD_PASSWORD
+  hermes_dashboard_basic_auth_secret:
+    environment: ISOLATION_DASHBOARD_SECRET
 
 networks:
   agent-proxy:

@@ -16,9 +16,11 @@ are reached by `url`, in a container of their own.
 """
 import sys
 
-import yaml
+# the YAML parser hermes-agent itself depends on; it dropped PyYAML
+from ruamel.yaml import YAML
 
-config = yaml.safe_load(open(sys.argv[1])) or {}
+with open(sys.argv[1]) as stream:
+    config = YAML(typ="safe").load(stream) or {}
 terminal = config.get("terminal") or {}
 problems = []
 if terminal.get("env_passthrough"):

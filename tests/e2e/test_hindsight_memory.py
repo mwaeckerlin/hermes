@@ -1,6 +1,8 @@
-"""Hermes' Hindsight memory end to end: the gateway image's plugin, loaded by
-hermes' own provider lookup, against a real Hindsight server behind a proxy
-that adds the key (test/docker-compose.yml). The test container holds no key.
+"""Hermes' Hindsight memory end to end: the Hindsight plugin, installed into
+HERMES_HOME the way the gateway entrypoint installs it (test/Dockerfile) and
+loaded by hermes' own provider lookup, against a real Hindsight server behind a
+proxy that adds the key (test/docker-compose.yml). The test container holds no
+key.
 """
 
 import json
@@ -26,14 +28,14 @@ def render(template, target, env):
 
 
 @pytest.fixture
-def provider(tmp_path, monkeypatch):
+def provider(monkeypatch):
     bank = f"hermes-e2e-{uuid.uuid4().hex[:8]}"
-    home = tmp_path / "home"
-    (home / "hindsight").mkdir(parents=True)
+    # the home the plugin was installed into: its dependencies live there
+    home = Path(os.environ["HERMES_HOME"])
+    (home / "hindsight").mkdir(parents=True, exist_ok=True)
     env = {k: v for k, v in os.environ.items() if not k.startswith("HINDSIGHT_API_KEY")}
     env.update({"HINDSIGHT_API_URL": PROXY, "HINDSIGHT_BANK_ID": bank, "HINDSIGHT_RETAIN_TAGS": "e2e"})
     render(HINDSIGHT, home / "hindsight" / "config.json", env)
-    monkeypatch.setenv("HERMES_HOME", str(home))
     monkeypatch.delenv("HINDSIGHT_API_KEY", raising=False)
     from plugins.memory import load_memory_provider
     memory = load_memory_provider("hindsight")

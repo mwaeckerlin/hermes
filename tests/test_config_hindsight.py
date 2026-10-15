@@ -6,8 +6,9 @@ import os
 import subprocess
 from pathlib import Path
 
-import yaml
+from ruamel.yaml import YAML
 
+yaml = YAML(typ="safe")
 ROOT = Path(__file__).resolve().parents[1]
 RENDER = ROOT / "files" / "render-config.py"
 CONFIG = ROOT / "files" / "config.yaml.j2"
@@ -25,28 +26,28 @@ def render(template, tmp_path, **extra_env):
 
 
 def test_memory_provider_from_environment(tmp_path):
-    config = yaml.safe_load(render(CONFIG, tmp_path, HERMES_MEMORY_PROVIDER="hindsight"))
+    config = yaml.load(render(CONFIG, tmp_path, HERMES_MEMORY_PROVIDER="hindsight"))
 
     assert config["memory"]["provider"] == "hindsight"
     assert config["memory"]["memory_enabled"] is True
 
 
 def test_no_memory_provider_by_default(tmp_path):
-    config = yaml.safe_load(render(CONFIG, tmp_path))
+    config = yaml.load(render(CONFIG, tmp_path))
 
     assert "provider" not in config["memory"]
 
 
 def test_shared_bank_rendered_as_mcp_server(tmp_path):
     url = "http://hindsight-proxy:8888/mcp/shared/"
-    config = yaml.safe_load(render(CONFIG, tmp_path, HINDSIGHT_SHARED_MCP_URL=url))
+    config = yaml.load(render(CONFIG, tmp_path, HINDSIGHT_SHARED_MCP_URL=url))
 
     assert config["mcp_servers"] == {"hindsight-shared": {"url": url}}
 
 
 def test_shared_bank_joins_explicit_mcp_servers(tmp_path):
     url = "http://hindsight-proxy:8888/mcp/shared/"
-    config = yaml.safe_load(render(
+    config = yaml.load(render(
         CONFIG, tmp_path,
         HINDSIGHT_SHARED_MCP_URL=url,
         HERMES_MCP_SERVERS_YAML='{"github":{"url":"http://mcp-github:4000/mcp"}}',
@@ -57,7 +58,7 @@ def test_shared_bank_joins_explicit_mcp_servers(tmp_path):
 
 
 def test_no_mcp_servers_by_default(tmp_path):
-    config = yaml.safe_load(render(CONFIG, tmp_path))
+    config = yaml.load(render(CONFIG, tmp_path))
 
     assert "mcp_servers" not in config
 
@@ -97,14 +98,14 @@ def test_hindsight_settings_never_hold_a_key(tmp_path):
 
 
 def test_litellm_base_url_alone_selects_litellm(tmp_path):
-    config = yaml.safe_load(render(CONFIG, tmp_path, LITELLM_BASE_URL="http://litellm-proxy:4000/v1"))
+    config = yaml.load(render(CONFIG, tmp_path, LITELLM_BASE_URL="http://litellm-proxy:4000/v1"))
 
     assert config["model"]["base_url"] == "http://litellm-proxy:4000/v1"
 
 
 def test_litellm_key_is_named_never_written(tmp_path):
     text = render(CONFIG, tmp_path, LITELLM_BASE_URL="http://litellm:4000/v1", LITELLM_API_KEY="litellm-secret-123")
-    config = yaml.safe_load(text)
+    config = yaml.load(text)
 
     assert "litellm-secret-123" not in text
     assert config["model"]["key_env"] == "LITELLM_API_KEY"

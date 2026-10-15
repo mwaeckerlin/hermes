@@ -1,12 +1,12 @@
 # Tests
 
-Register of all tests, grouped by kind and sorted by the [FEATURES.md](FEATURES.md) number each test covers. `npm test` runs everything after `npm run build`; the guard `tests/docs-contract.sh` fails when a feature has no test entry here, when a `SECURITY-WORKAROUND` has passed its review date, or when any test carries a skip marker — tests are never skipped.
+Register of all tests, grouped by kind and sorted by the [FEATURES.md](FEATURES.md) number each test covers. `npm test` builds the three images with `npm run build` and then runs everything against them; the guard `tests/docs-contract.sh` fails when a feature has no test entry here, when a `SECURITY-WORKAROUND` has passed its review date, or when any test carries a skip marker — tests are never skipped.
 
 The sandbox toolset and SSH behaviour are tested end to end in the [mwaeckerlin/sandbox-base] project (this stack consumes that image); the rootless docker-in-docker daemon is tested end to end in the [mwaeckerlin/dockindock] project.
 
 ## Backend API
 
-`npm run test:python` runs these inside the built dashboard image (`test/docker-compose.yml`), on the plugin files and the config renderer as the dashboard and gateway images ship them, and on the pairing store of the hermes-agent version in the image.
+`npm run test:python` runs these inside the test image built from the gateway image (`test/Dockerfile`, `test/docker-compose.yml`), on the plugin files and the config renderer as the dashboard and gateway images ship them, and on the pairing store of the hermes-agent version in the image.
 
 - **F7** `tests/test_todo_api.py` — the TODO plugin API over HTTP: full review cycle, empty claim, forbidden transitions (400), unknown task (404), cancel and delete.
 - **F9** `tests/test_pairing_api.py` — the pairing plugin API over HTTP: list with request id, approve by request id and by the reported code, unknown request and code refused, neither given (400), revoke.
@@ -14,9 +14,9 @@ The sandbox toolset and SSH behaviour are tested end to end in the [mwaeckerlin/
 
 ## Hindsight End to End
 
-`npm run test:e2e` runs `tests/e2e/` with `tests/run-e2e.sh` in `test/docker-compose.yml`: a real Hindsight server with its mock LLM that demands a key, an nginx proxy that adds the key, and the test container built from the gateway image, which holds no key.
+`npm run test:e2e` runs `tests/e2e/` with `tests/run-e2e.sh` in `test/docker-compose.yml`: a real Hindsight server with its mock LLM that demands a key, an nginx proxy that adds the key, and the test container built from the gateway image, which holds no key and carries the Hindsight plugin installed the way the gateway installs it on its first start.
 
-- **F10** `tests/run-e2e.sh` › gateway_memory_status: the gateway image, started through its real entrypoint with `HERMES_MEMORY_PROVIDER=hindsight`, writes `hindsight/config.json` from the environment, and `hermes memory status` reports the provider hindsight as installed and available, with no warning.
+- **F10** `tests/run-e2e.sh` › gateway_memory_status: the gateway image, started through its real entrypoint with `HERMES_MEMORY_PROVIDER=hindsight` on an empty data volume, installs the Hindsight plugin, writes `hindsight/config.json` from the environment, and `hermes memory status` reports the provider hindsight as installed and available, with no warning.
 - **F10** `tests/e2e/test_hindsight_memory.py` › test_container_holds_no_hindsight_key, test_server_refuses_a_request_without_the_proxy: the key lives only in the proxy, and the server refuses a request that does not pass it.
 - **F10** `tests/e2e/test_hindsight_memory.py` › test_retain_and_recall_through_the_proxy: hermes finds the plugin through its own provider lookup, the plugin offers its three tools, and a memory retained through the proxy is recalled.
 - **F10** `tests/e2e/test_hindsight_memory.py` › test_shared_bank_is_an_mcp_server_of_hermes: `HINDSIGHT_SHARED_MCP_URL` becomes the MCP server `hindsight-shared` in hermes' own MCP configuration, and that endpoint answers the MCP handshake through the proxy.
@@ -34,6 +34,9 @@ The sandbox toolset and SSH behaviour are tested end to end in the [mwaeckerlin/
 - **F12** `tests/isolation/test_agent_sees_no_secret.py` › test_sandbox_cannot_reach_the_dashboard: the sandbox cannot connect to the dashboard.
 - **F12** `tests/isolation/dashboard_check.py` › dashboard_requires_login, dashboard_shows_no_secret: the dashboard's key page refuses a request without login and, logged in, shows no secret of the gateway.
 - **F2** `tests/isolation/dashboard_check.py` › dashboard_requires_login: the dashboard starts with the current hermes-agent and serves its pages behind the login.
+- **F2** `tests/run-isolation.sh` › dashboard_login_not_in_environment: the dashboard gets its password and session secret as Docker secrets only, and its container configuration carries neither.
+- **F2** `tests/isolation/dashboard_check.py` › dashboard_login_from_secret: the login with the password of the Docker secret `hermes_dashboard_basic_auth_password` succeeds.
+- **F2** `tests/isolation/dashboard_check.py` › dashboard_session_survives_restart: the session cookie of a login still opens the key page after a restart of the dashboard, so the session was signed with the Docker secret `hermes_dashboard_basic_auth_secret`.
 - **F13** `tests/isolation/test_agent_sees_no_secret.py` › test_agent_is_told_never_to_ask_for_a_secret: the system prompt the agent works with carries the rule never to ask for a secret and to warn first when the user offers one.
 
 ## OpenCode Delegation

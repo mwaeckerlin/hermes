@@ -104,11 +104,13 @@ Do not give the agent a secret: whatever you type into the chat is sent to the m
 - **The dashboard can read and change keys and configuration.** Whoever logs in on port 9119 can write `.env`, change `config.yaml` while the gateway runs, and reveal keys stored in `.env`. It requires a login (`HERMES_DASHBOARD_BASIC_AUTH_*`) and speaks plain HTTP: publish it only behind a TLS reverse proxy, or not at all.
 - **A configuration changed at runtime is checked at the next start only.** The isolation check runs in the entrypoint; a `config.yaml` edited through the dashboard takes effect before it. The sandbox's `sshd` still drops every variable, and `$HERMES_HOME` holds no key file to copy.
 - **The SSH key of the sandbox is in the gateway.** Whoever controls the gateway controls the sandbox; the key never reaches the sandbox or the agent.
+- **Hindsight's dependencies skip the 14-day waiting period.** Hermes holds its own Python dependencies back until they are 14 days old; a plugin's dependencies follow the version bounds the plugin sets (`hindsight-client>=0.10.1,<1`), and hermes resolves them on the gateway's first start. A malicious release inside those bounds reaches the gateway, which holds the secrets, on its next start with an empty volume. The plugin code itself comes from the commit the hermes catalog pins.
 - **OpenCode without a password trusts its network.** The sandbox reaches the OpenCode server without a password, so every container on that network can hand OpenCode tasks, and OpenCode acts with its own model key. Only the agent sandboxes and OpenCode join that network (see [Development with OpenCode](#development-with-opencode)).
 
 ### Docker Secrets
 
 - **Docker Secrets** (production) — use `docker secret` instead of environment variables. The gateway entrypoint reads every file in `/run/secrets/`, uppercases the filename, and exports it as an environment variable. Example: `/run/secrets/hermes_sandbox_ssh_private_key` → `HERMES_SANDBOX_SSH_PRIVATE_KEY`.
+- **Dashboard login as secrets:** the dashboard applies the same rule before it starts, so its login comes from the secrets `hermes_dashboard_basic_auth_password` (or `hermes_dashboard_basic_auth_password_hash`) and `hermes_dashboard_basic_auth_secret`, and neither the rendered stack nor `docker service inspect` shows it. Only the user name, `HERMES_DASHBOARD_BASIC_AUTH_USERNAME`, stays a variable. The image's own init stays process 1: s6 runs the conversion in `/etc/cont-init.d` and hands the values to the dashboard.
 
 ### SSH Trust Assumptions
 
@@ -213,20 +215,20 @@ HERMES_DASHBOARD_BASIC_AUTH_USERNAME=admin
 HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=[YOUR-DASHBOARD-PASSWORD]
 ```
 
-For production, give `HERMES_DASHBOARD_BASIC_AUTH_PASSWORD_HASH` instead of the password, made with `docker compose run --rm --entrypoint /opt/hermes/.venv/bin/python3 hermes-dashboard -c "from plugins.dashboard_auth.basic import hash_password; print(hash_password('…'))"`, and a fixed `HERMES_DASHBOARD_BASIC_AUTH_SECRET` so sessions survive a restart.
+For production, give `HERMES_DASHBOARD_BASIC_AUTH_PASSWORD_HASH` instead of the password, made with `docker compose run --rm --entrypoint /opt/hermes/.venv/bin/python3 hermes-dashboard -c "from plugins.dashboard_auth.basic import hash_password; print(hash_password('…'))"`, and a fixed `HERMES_DASHBOARD_BASIC_AUTH_SECRET` so sessions survive a restart. In a swarm, give both as Docker secrets (see [Docker Secrets](#docker-secrets)).
 
 ### 2. Start
 
 `npm start` runs the stack in the foreground and shows the logs as they arrive:
 
 ```bash
-$ npm start
+npm start
 ```
 
 `npm run start:daemon` runs it in the background:
 
 ```bash
-$ npm run start:daemon
+npm run start:daemon
 ```
 
 Dashboard (web UI): `http://localhost:9119/`
@@ -319,7 +321,7 @@ All optional — configure one or more. If none is set the gateway exits with a
 
 ### Hindsight Long-Term Memory
 
-[Hindsight](https://github.com/vectorize-io/hindsight) is a self-hosted agent memory. The gateway image carries its hermes memory provider at the commit the hermes-agent plugin catalog pins. With `HERMES_MEMORY_PROVIDER=hindsight` the agent recalls from and retains into its own memory bank on every turn and gets the tools `hindsight_retain`, `hindsight_recall` and `hindsight_reflect`. A second bank, shared with other agents, joins as an MCP server.
+[Hindsight](https://github.com/vectorize-io/hindsight) is a self-hosted agent memory. Its hermes memory provider is a plugin of the hermes-agent plugin catalog: on its first start with `HERMES_MEMORY_PROVIDER=hindsight` and an empty data volume, the gateway installs it into the volume with `hermes plugins install hindsight --yes-deps --enable`, at the commit the catalog pins, with its Python dependencies. That first start needs GitHub and PyPI; a failed install stops the start, because the agent would otherwise run without its memory. Later starts use the plugin in the volume, also after an image update; `hermes plugins update hindsight` in the gateway brings it to the commit the catalog of the new image pins. With `HERMES_MEMORY_PROVIDER=hindsight` the agent recalls from and retains into its own memory bank on every turn and gets the tools `hindsight_retain`, `hindsight_recall` and `hindsight_reflect`. A second bank, shared with other agents, joins as an MCP server.
 
 | Variable | Default | Description |
 |---|---|---|
@@ -661,20 +663,18 @@ Docker Swarm does not support `privileged: true` in stack deploy files. Docker-i
 ## Development
 
 ```bash
-$ npm run build      # docker compose build of all images
-$ npm test           # the whole suite, after the build
-$ npm run build:doc  # regenerate the diagrams in doc/ from this README
+npm run build      # docker compose build of all images
+npm test           # builds the images, then runs the whole suite
+npm run build:doc  # regenerate the diagrams in doc/ from this README
 ```
 
-`npm test` runs the register guard (`tests/docs-contract.sh`), the frontend tests of the TODO and pairing plugins, the Python tests inside an image built from the gateway image (`test/docker-compose.yml`: config rendering, TODO storage and API, pairing API, a LiteLLM request without a key), the Hindsight memory end to end against a real Hindsight server, once behind a key-adding proxy and once with the key in the gateway (`tests/run-e2e.sh`), the isolation end to end that lets the real agent search for planted secrets (`tests/run-isolation.sh`), and the compose wiring contract (`tests/compose-contract.sh`). The Python tests run against the built images, so `npm run build` comes first.
+`npm test` runs the register guard (`tests/docs-contract.sh`), the frontend tests of the TODO and pairing plugins, the Python tests inside an image built from the gateway image (`test/docker-compose.yml`: config rendering, TODO storage and API, pairing API, a LiteLLM request without a key), the Hindsight memory end to end against a real Hindsight server, once behind a key-adding proxy and once with the key in the gateway (`tests/run-e2e.sh`), the isolation end to end that lets the real agent search for planted secrets (`tests/run-isolation.sh`), the OpenCode delegation (`tests/opencode-delegation.sh`), and the compose wiring contract (`tests/compose-contract.sh`). Every test runs against the built images, so `npm test` builds them first.
 
-The Hindsight server of the end-to-end test logs one warning that belongs to its own image: its reranker model `cross-encoder/ms-marco-MiniLM-L-6-v2` ships misaligned tensors, which Hindsight copies out of memory-mapped storage at start so its scores stay correct. Nothing in this repository causes or can remove it; every other warning fails the run.
+The Hindsight server of the end-to-end test logs one warning that belongs to its own image: its reranker model `cross-encoder/ms-marco-MiniLM-L-6-v2` ships misaligned tensors, which Hindsight copies out of memory-mapped storage at start so its scores stay correct. Nothing in this repository causes or can remove it. The dashboard's own init, s6, logs `s6-rc: warning: service s6rc-oneshot-runner is marked as essential, not stopping it` whenever its container stops, which the isolation test does once to restart the dashboard and once at the end. Every other warning fails the run.
 
 ### Security Workarounds
 
-| Where | What | Removed when |
-|---|---|---|
-| `Dockerfile.gateway` | `hindsight-client` is exempt from hermes' 14-day release quarantine (`exclude-newer` in the hermes-agent `pyproject.toml`); the Hindsight plugin needs 0.10.1, published 2026-09-21. Its own dependencies stay under the quarantine. | 0.10.1 is older than 14 days, from 2026-10-05; `tests/docs-contract.sh` turns red after the review date 2026-10-06 |
+None. Every Python package of the images resolves under hermes' 14-day release quarantine (`exclude-newer` in the hermes-agent `pyproject.toml`). A workaround carries the marker `SECURITY-WORKAROUND` and a review date at its place, listed here, and `tests/docs-contract.sh` turns red once the date has passed.
 
 ### Images and Tags
 

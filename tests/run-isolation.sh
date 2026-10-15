@@ -12,6 +12,9 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 export ISOLATION_GATEWAY_IMAGE="${1:-mwaeckerlin/hermes:gateway}"
 export ISOLATION_TERMINAL_YAML="${2:-}"
+# the dashboard's login, handed to it as Docker secrets only
+export ISOLATION_DASHBOARD_PASSWORD="isolation-dashboard-password-$$"
+export ISOLATION_DASHBOARD_SECRET="isolation-dashboard-session-secret-$$"
 echo "==> isolation of ${ISOLATION_GATEWAY_IMAGE} ${ISOLATION_TERMINAL_YAML:+with terminal ${ISOLATION_TERMINAL_YAML}}"
 
 COMPOSE=(docker compose -f test/docker-compose.yml)
@@ -58,8 +61,33 @@ echo "==> gateway exit code ${GATEWAY}"
 
 "${COMPOSE[@]}" run --rm isolation-check || exit 1
 
+# the dashboard reads its password and session secret from Docker secrets:
+# neither stands in the container's configuration
+CONFIG_ENV=$(docker inspect --format '{{json .Config.Env}}' "$("${COMPOSE[@]}" ps -q isolation-dashboard)")
+if [[ "${CONFIG_ENV}" == *"${ISOLATION_DASHBOARD_PASSWORD}"* || "${CONFIG_ENV}" == *"${ISOLATION_DASHBOARD_SECRET}"* ]]; then
+    echo "FAIL  dashboard_login_not_in_environment: the container configuration carries the login"
+    exit 1
+fi
+echo "PASS  dashboard_login_not_in_environment"
+
 # the dashboard shares the data volume with the gateway: its key page needs
-# a login and, logged in, shows no secret of the gateway
-"${COMPOSE[@]}" exec -T isolation-dashboard /opt/hermes/.venv/bin/python3 - \
-    isolation-admin isolation-dashboard-password hermes-canary "${PROBE_KEY_MARKER}" \
+# a login, the password of the Docker secret opens it, and logged in, it shows
+# no secret of the gateway
+LOGIN=$("${COMPOSE[@]}" exec -T isolation-dashboard /opt/hermes/.venv/bin/python3 - login \
+    isolation-admin "${ISOLATION_DASHBOARD_PASSWORD}" hermes-canary "${PROBE_KEY_MARKER}" \
+    < tests/isolation/dashboard_check.py)
+LOGIN_EXIT=$?
+grep -v '^COOKIE ' <<<"${LOGIN}"
+[[ ${LOGIN_EXIT} -eq 0 ]] || exit 1
+COOKIE=$(sed -n 's/^COOKIE //p' <<<"${LOGIN}")
+
+# a session survives a restart only when its token was signed with the
+# session secret of the Docker secret
+"${COMPOSE[@]}" restart isolation-dashboard || exit 1
+for _ in $(seq 1 60); do
+    "${COMPOSE[@]}" exec -T isolation-dashboard /opt/hermes/.venv/bin/python3 -c \
+        'import urllib.request; urllib.request.urlopen("http://127.0.0.1:9119/", timeout=5)' >/dev/null 2>&1 && break
+    sleep 2
+done
+"${COMPOSE[@]}" exec -T isolation-dashboard /opt/hermes/.venv/bin/python3 - session "${COOKIE}" \
     < tests/isolation/dashboard_check.py

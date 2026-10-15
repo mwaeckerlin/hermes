@@ -1,5 +1,11 @@
 # Changelog
 
+- 2026-10-15 **1.0.5**
+    - The dashboard takes its password and session key from Docker secrets, so a swarm deployment shows neither in its configuration
+    - The gateway image builds and starts again with the current Hermes, which reads YAML with another library
+    - Hindsight memory with the current Hermes, where Hindsight became a plugin: the gateway installs it into the data volume on its first start, which needs GitHub and PyPI once
+    - The current Hermes holds back only its own new Python packages for 14 days, no longer those of a plugin: Hindsight's packages arrive without the waiting period, a risk named in the README
+
 - 2026-09-29 **1.0.4**
     - Development goes to OpenCode: the agent hands software development tasks to the central OpenCode server set in `HERMES_OPENCODE_URL` and reports its result; the sandbox carries the OpenCode client
     - A delegation that gets no answer ends after `HERMES_OPENCODE_TIMEOUT` seconds (two hours by default) with a message, and an unreachable or refusing OpenCode server is named as such
