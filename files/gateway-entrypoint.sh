@@ -273,13 +273,29 @@ os.execv(sys.argv[1], sys.argv[1:])
 # hermes documents for Docker entrypoints; it needs GitHub and PyPI once, on
 # the first start with a fresh volume. Without the provider the agent would
 # run without its memory, so a failed install stops the start.
+#
+# Hermes publishes the plugin only when config.yaml is still what it was when
+# the install began, and otherwise stops with «Plugin enablement changed while
+# preparing the update; retry.» (pm/publication.py). The dashboard on the same
+# volume rewrites config.yaml when its init runs (seed and migration), and it
+# starts while this install runs, so the install is tried again, as hermes
+# asks, up to HERMES_PLUGIN_INSTALL_ATTEMPTS times.
+_attempts="${HERMES_PLUGIN_INSTALL_ATTEMPTS:-5}"
+case "${_attempts}" in
+  ''|*[!0-9]*|0) echo "invalid HERMES_PLUGIN_INSTALL_ATTEMPTS: '${_attempts}'" >&2; exit 1 ;;
+esac
 if [ "${HERMES_MEMORY_PROVIDER:-}" = "hindsight" ] && [ ! -d "${HERMES_HOME}/plugins/hindsight" ]; then
-  echo "==== Installing the Hindsight memory provider ===="
-  if ! /opt/hermes/.venv/bin/python3 -c "${_as_hermes}" /opt/hermes/.venv/bin/hermes \
-      plugins install hindsight --yes-deps --enable; then
-    echo "ERROR: the Hindsight memory provider could not be installed; the gateway needs GitHub and PyPI on its first start with HERMES_MEMORY_PROVIDER=hindsight" >&2
-    exit 1
-  fi
+  _attempt=1
+  until echo "==== Installing the Hindsight memory provider, attempt ${_attempt} of ${_attempts} ====" \
+      && /opt/hermes/.venv/bin/python3 -c "${_as_hermes}" /opt/hermes/.venv/bin/hermes \
+           plugins install hindsight --yes-deps --enable; do
+    if [ "${_attempt}" -ge "${_attempts}" ]; then
+      echo "ERROR: the Hindsight memory provider could not be installed in ${_attempts} attempts; the gateway needs GitHub and PyPI on its first start with HERMES_MEMORY_PROVIDER=hindsight" >&2
+      exit 1
+    fi
+    _attempt=$((_attempt + 1))
+    sleep 10
+  done
 fi
 
 echo "Dropping root privileges"

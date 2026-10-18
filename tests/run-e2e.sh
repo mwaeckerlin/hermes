@@ -12,6 +12,9 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 
 COMPOSE=(docker compose -f test/docker-compose.yml)
+# the dashboard login of the first-start stack, for this run only
+export ISOLATION_DASHBOARD_PASSWORD="e2e-dashboard-password-$$"
+export ISOLATION_DASHBOARD_SECRET="e2e-dashboard-secret-$$-$RANDOM"
 trap '"${COMPOSE[@]}" down --volumes --remove-orphans' EXIT
 
 echo "==> gateway entrypoint: hermes memory status"
@@ -29,6 +32,73 @@ if grep -qi "warning" <<<"${STATUS}"; then
     exit 1
 fi
 echo "PASS  gateway_memory_status"
+
+# waits until the gateway service $1 prints its start banner, exits, or the
+# deadline in seconds ($2) passes; prints why it stopped waiting
+_wait_gateway_start() {
+    local service="$1" deadline=$((SECONDS + $2)) id state
+    while [[ ${SECONDS} -lt ${deadline} ]]; do
+        if "${COMPOSE[@]}" logs --no-color "${service}" 2>&1 | grep -qF "Hermes Gateway Starting"; then
+            echo "started"
+            return 0
+        fi
+        id=$("${COMPOSE[@]}" ps -aq "${service}")
+        state=$(docker inspect --format '{{.State.Status}}' "${id}" 2>/dev/null)
+        if [[ "${state}" == "exited" ]]; then
+            echo "exited"
+            return 1
+        fi
+        sleep 5
+    done
+    echo "deadline"
+    return 1
+}
+
+# the first start on an empty volume with the dashboard on the same volume
+# reaches the start banner and keeps running (regression: «Plugin 'hindsight'
+# was not published: Plugin enablement changed while preparing the update;
+# retry.» stopped the gateway, because the dashboard's init rewrote
+# config.yaml during the install)
+echo "==> first start on an empty volume shared with the dashboard"
+"${COMPOSE[@]}" up -d first-start-gateway first-start-dashboard first-start-config-rewriter || exit 1
+RESULT=$(_wait_gateway_start first-start-gateway 1800)
+sleep 30
+STATE=$(docker inspect --format '{{.State.Status}}' "$("${COMPOSE[@]}" ps -aq first-start-gateway)" 2>/dev/null)
+REWRITTEN=$("${COMPOSE[@]}" logs --no-color first-start-config-rewriter 2>&1)
+if [[ "${REWRITTEN}" != *"config.yaml rewritten while the dependency lock is held"* ]]; then
+    echo "FAIL  first_start_with_dashboard_on_the_volume: config.yaml was not rewritten during the install: ${REWRITTEN}"
+    exit 1
+fi
+if [[ "${RESULT}" == "started" && "${STATE}" == "running" ]]; then
+    echo "PASS  first_start_with_dashboard_on_the_volume"
+else
+    echo "FAIL  first_start_with_dashboard_on_the_volume: ${RESULT}, ${STATE}"
+    "${COMPOSE[@]}" logs --no-color --tail 40 first-start-gateway
+    exit 1
+fi
+"${COMPOSE[@]}" rm -sf first-start-gateway first-start-dashboard first-start-config-rewriter > /dev/null 2>&1
+
+# a gateway stopped in the middle of its first install and started again on
+# the half-written volume gets through, as a restart by Swarm must
+echo "==> restart in the middle of the first install"
+"${COMPOSE[@]}" up -d restart-gateway || exit 1
+DEADLINE=$((SECONDS + 600))
+until "${COMPOSE[@]}" logs --no-color restart-gateway 2>&1 | grep -qF "Installing the Hindsight memory provider" \
+        || [[ ${SECONDS} -ge ${DEADLINE} ]]; do
+    sleep 2
+done
+sleep 20
+"${COMPOSE[@]}" kill restart-gateway > /dev/null 2>&1
+"${COMPOSE[@]}" start restart-gateway > /dev/null 2>&1
+RESULT=$(_wait_gateway_start restart-gateway 1800)
+if [[ "${RESULT}" == "started" ]]; then
+    echo "PASS  restart_during_first_install"
+else
+    echo "FAIL  restart_during_first_install: ${RESULT}"
+    "${COMPOSE[@]}" logs --no-color --tail 40 restart-gateway
+    exit 1
+fi
+"${COMPOSE[@]}" rm -sf restart-gateway > /dev/null 2>&1
 
 "${COMPOSE[@]}" up --build --abort-on-container-exit --exit-code-from hindsight-e2e \
     hindsight-e2e hindsight-proxy hindsight || exit 1

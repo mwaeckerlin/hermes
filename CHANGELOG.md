@@ -1,5 +1,9 @@
 # Changelog
 
+- 2026-10-18 **1.0.6**
+    - The gateway gets through its first start on an empty data volume that the dashboard shares: the install of the Hindsight plugin is tried again when hermes refuses to publish it because the dashboard rewrote `config.yaml` meanwhile, up to `HERMES_PLUGIN_INSTALL_ATTEMPTS` times (default 5), and a gateway restarted in the middle of the install gets through as well
+    - Test suite: the Hindsight end-to-end tests start again with the current upstream hermes, which takes the base site-packages off the path when it selects the plugin's dependencies, so pytest lost the metadata of pluggy
+
 - 2026-10-15 **1.0.5**
     - The dashboard takes its password and session key from Docker secrets, so a swarm deployment shows neither in its configuration
     - The gateway image builds and starts again with the current Hermes, which reads YAML with another library
