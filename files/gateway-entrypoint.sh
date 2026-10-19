@@ -240,6 +240,22 @@ unset HERMES_INTERACTIVE
 _credential_rule="Credentials: you never hold a password, token, API key or private key. The gateway keeps them and your tools reach the services without showing them to you. Never ask the user for a password, token, API key or private key, and never suggest sending one. If the user offers or sends one, first warn that it becomes part of this conversation, which is sent to the model provider and stored in the history, and recommend revoking it; use it only if the user confirms after that warning."
 export HERMES_ENVIRONMENT_HINT="${_credential_rule}${HERMES_ENVIRONMENT_HINT:+ ${HERMES_ENVIRONMENT_HINT}}"
 
+# The gateway's API server (port 8642, whose /health the HEALTHCHECK asks)
+# starts only with an API_SERVER_KEY of 16 characters or more
+# (gateway/platforms/api_server.py). The upstream image writes one into
+# HERMES_HOME/.env from its own init, which this entrypoint does not run, so
+# the gateway does the same: a key from the environment or a secret wins,
+# then the one in .env, which hermes loads at its start, else a new one there.
+if [ -z "${API_SERVER_KEY:-}" ] && ! grep -q '^API_SERVER_KEY=..*' "${HERMES_HOME}/.env" 2>/dev/null; then
+  _api_server_key=$(/opt/hermes/.venv/bin/python3 -c "import secrets; print(secrets.token_hex(32))")
+  printf 'API_SERVER_KEY=%s\n' "${_api_server_key}" >> "${HERMES_HOME}/.env"
+  unset _api_server_key
+  # hermes reads it as uid 10000 after the privilege drop below
+  chown hermes:hermes "${HERMES_HOME}/.env"
+  chmod 600 "${HERMES_HOME}/.env"
+  echo "Generated API_SERVER_KEY in ${HERMES_HOME}/.env for the gateway API server"
+fi
+
 # Fix ownership of the data directory (Hermes runs as uid 10000 / hermes).
 if [ "$(stat -c '%u' "${HERMES_HOME}")" != "10000" ]; then
   echo "${HERMES_HOME} is not owned by 10000, fixing"

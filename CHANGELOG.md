@@ -1,5 +1,11 @@
 # Changelog
 
+- 2026-10-19 **1.0.7**
+    - The gateway turns healthy in Docker Swarm: its health check asked `/healthz`, which the API server of hermes does not serve, so Swarm stopped the gateway again and again; it asks `/health` now and prints the answer or what it waits for
+    - The gateway creates the key of its API server in the data volume when none is given, as the upstream image does, so the API server and its health check run also without a dashboard on the volume
+    - The shared Hindsight bank is reached with the gateway's Hindsight key: its MCP entry carries the key as bearer, filled in by hermes when it connects, where Hindsight refused the connect with 401
+    - Test suite: the OpenCode delegation contract waits until the sandbox has written the OpenCode URL into the environment of the SSH sessions, where it read the environment as soon as the skills were copied and failed when the URL came a moment later
+
 - 2026-10-18 **1.0.6**
     - The gateway gets through its first start on an empty data volume that the dashboard shares: the install of the Hindsight plugin is tried again when hermes refuses to publish it because the dashboard rewrote `config.yaml` meanwhile, up to `HERMES_PLUGIN_INSTALL_ATTEMPTS` times (default 5), and a gateway restarted in the middle of the install gets through as well
     - Test suite: the Hindsight end-to-end tests start again with the current upstream hermes, which takes the base site-packages off the path when it selects the plugin's dependencies, so pytest lost the metadata of pluggy

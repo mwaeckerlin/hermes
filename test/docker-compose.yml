@@ -66,6 +66,9 @@ services:
   # docker-compose.yml: the dashboard starts once the gateway has started,
   # while the gateway installs the Hindsight plugin, and its init rewrites
   # config.yaml (seed and migration); the gateway has to get through
+  # as in the swarm: a real Hindsight that demands its tenant key, the key
+  # held by the gateway alone, and the shared bank as MCP server straight on
+  # Hindsight, with no proxy in front
   first-start-gateway:
     image: mwaeckerlin/hermes:gateway
     init: true
@@ -73,9 +76,18 @@ services:
       HERMES_SANDBOX_SSH_PRIVATE_KEY: not-a-real-key
       LITELLM_BASE_URL: http://litellm-proxy:4000/v1
       HERMES_MEMORY_PROVIDER: hindsight
-      HINDSIGHT_API_URL: http://hindsight-proxy:8888
+      HINDSIGHT_API_URL: http://hindsight:8888
+      HINDSIGHT_API_KEY: hermes-e2e-proxy-key
+      HINDSIGHT_BANK_ID: hermes
+      HINDSIGHT_SHARED_MCP_URL: http://hindsight:8888/mcp/shared/
+    depends_on:
+      hindsight:
+        condition: service_healthy
     volumes:
       - first-start-data:/opt/data
+    networks:
+      - default
+      - proxy-hindsight
 
   first-start-dashboard:
     image: mwaeckerlin/hermes:dashboard
@@ -122,8 +134,14 @@ services:
     image: mwaeckerlin/hermes:gateway
     init: true
     environment: *first-start-gateway-env
+    depends_on:
+      hindsight:
+        condition: service_healthy
     volumes:
       - restart-data:/opt/data
+    networks:
+      - default
+      - proxy-hindsight
 
   # isolation: the real gateway with a secret in every variable it knows,
   # the real sandbox, and a scripted model that drives the agent to every

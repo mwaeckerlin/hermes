@@ -45,6 +45,20 @@ def test_shared_bank_rendered_as_mcp_server(tmp_path):
     assert config["mcp_servers"] == {"hindsight-shared": {"url": url}}
 
 
+def test_shared_bank_carries_the_key_as_a_placeholder(tmp_path):
+    # with the key held by the gateway, the MCP connect to the shared bank
+    # carries it as bearer; hermes fills in ${HINDSIGHT_API_KEY} when it
+    # connects, so the key itself never stands in config.yaml (regression:
+    # Hindsight answered the connect without the bearer with 401)
+    url = "http://hindsight:8888/mcp/shared/"
+    text = render(CONFIG, tmp_path, HINDSIGHT_SHARED_MCP_URL=url, HINDSIGHT_API_KEY="the-real-key-value")
+    config = yaml.load(text)
+
+    assert config["mcp_servers"]["hindsight-shared"] == {
+        "url": url, "headers": {"Authorization": "Bearer ${HINDSIGHT_API_KEY}"}}
+    assert "the-real-key-value" not in text
+
+
 def test_shared_bank_joins_explicit_mcp_servers(tmp_path):
     url = "http://hindsight-proxy:8888/mcp/shared/"
     config = yaml.load(render(

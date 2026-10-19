@@ -85,14 +85,20 @@ docker network create "${NETWORK}" >/dev/null
 docker run -d --name "${SANDBOX}" --network "${NETWORK}" \
     -e "HERMES_SANDBOX_SSH_PUBLIC_KEY=ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHermesOpenCodeContractTestKeyOnly0000000 test" \
     -e "HERMES_OPENCODE_URL=http://opencode-test:4096" -e "HERMES_OPENCODE_TIMEOUT=600" "${IMAGE}" >/dev/null
+_session_env_complete() {
+    grep -qx "HERMES_OPENCODE_URL=http://opencode-test:4096" <<<"${SESSION_ENV}" \
+        && grep -qx "HERMES_OPENCODE_TIMEOUT=600" <<<"${SESSION_ENV}" && [[ "${SESSION_ENV}" == *SKILL_INSTALLED* ]]
+}
+# the entrypoint copies the skills before it writes the URL, so the wait ends
+# on the complete state, which sshd starts after (regression: the wait ended on
+# the skill alone and read /etc/environment before the URL stood there)
 SESSION_ENV=""
 for _ in $(seq 1 30); do
     SESSION_ENV=$(docker exec "${SANDBOX}" sh -c 'cat /etc/environment; test -f "${RUN_HOME:-/home/somebody}"/.hermes/skills/opencode-delegation/SKILL.md && echo SKILL_INSTALLED' 2>/dev/null)
-    [[ "${SESSION_ENV}" == *SKILL_INSTALLED* ]] && break
+    _session_env_complete && break
     sleep 1
 done
-if grep -qx "HERMES_OPENCODE_URL=http://opencode-test:4096" <<<"${SESSION_ENV}" \
-    && grep -qx "HERMES_OPENCODE_TIMEOUT=600" <<<"${SESSION_ENV}" && [[ "${SESSION_ENV}" == *SKILL_INSTALLED* ]]; then
+if _session_env_complete; then
     _pass "url_and_skill_reach_the_agent"
 else
     _fail "url_and_skill_reach_the_agent" "${SESSION_ENV}; sandbox log: $(docker logs --tail 15 "${SANDBOX}" 2>&1)"

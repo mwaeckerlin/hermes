@@ -11,8 +11,10 @@ COPY files/hindsight-config.json.j2 /hindsight-config.json.j2
 COPY files/render-config.py /render-config.py
 COPY files/check-isolation.py /check-isolation.py
 COPY --chmod=0755 files/gateway-entrypoint.sh /entrypoint.sh
+# the API server of the gateway answers /health (gateway/platforms/api_server.py);
+# the check prints its answer, or what it waits for
 HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=60 \
-  CMD /opt/hermes/.venv/bin/python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8642/healthz', timeout=5)"
+  CMD ["/opt/hermes/.venv/bin/python3", "-c", "import sys, urllib.request\ntry:\n    print(urllib.request.urlopen('http://127.0.0.1:8642/health', timeout=5).read().decode()[:200])\nexcept Exception as error:\n    print(f'gateway API server on 127.0.0.1:8642 not answering /health: {error}')\n    sys.exit(1)"]
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["gateway", "run"]
 

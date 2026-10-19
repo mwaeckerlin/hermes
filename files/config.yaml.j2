@@ -372,6 +372,12 @@ mcp_servers:
   # the Hindsight memory bank shared with the other agents
   hindsight-shared:
     url: "{{ HINDSIGHT_SHARED_MCP_URL }}"
+{% if HINDSIGHT_API_KEY | default('') %}
+    # the gateway's Hindsight key as bearer: hermes fills in the placeholder
+    # from its environment when it connects, so the key never stands here
+    headers:
+      Authorization: "Bearer ${HINDSIGHT_API_KEY}"
+{% endif %}
 {% endif %}
 {% if HERMES_MCP_SERVERS_YAML | default('') %}
   # YAML merge key: the servers of HERMES_MCP_SERVERS_YAML join the ones above

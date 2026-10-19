@@ -11,7 +11,7 @@ A sandboxed Hermes runs after these steps:
 3. run `npm start`
 4. open the dashboard: [`http://localhost:9119/`](http://localhost:9119/)
 
-Port 8642 is the internal gateway API and health endpoint (`/healthz`) — it is **not** published to the host. The web dashboard runs as a separate service on port 9119 and is the only publicly exposed port.
+Port 8642 is the internal gateway API and health endpoint (`/health`) — it is **not** published to the host. The web dashboard runs as a separate service on port 9119 and is the only publicly exposed port.
 
 Or connect a chat platform (Telegram, Discord, Slack) and skip the HTTP ports entirely.
 
@@ -233,7 +233,7 @@ npm run start:daemon
 
 Dashboard (web UI): `http://localhost:9119/`
 
-The gateway API/health endpoint (`http://hermes-gateway:8642/healthz`) is internal only — accessible within Docker but not published to the host.
+The gateway API/health endpoint (`http://hermes-gateway:8642/health`) is internal only — accessible within Docker but not published to the host.
 
 This setup is for local or trusted-network use only. Do not expose the dashboard port to the Internet without a TLS reverse proxy and authentication.
 
