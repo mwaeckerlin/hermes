@@ -73,7 +73,9 @@ if [[ "${RESULT}" == "started" && "${STATE}" == "running" ]]; then
     echo "PASS  first_start_with_dashboard_on_the_volume"
 else
     echo "FAIL  first_start_with_dashboard_on_the_volume: ${RESULT}, ${STATE}"
-    "${COMPOSE[@]}" logs --no-color --tail 40 first-start-gateway
+    "${COMPOSE[@]}" logs --no-color --tail 40 first-start-gateway first-start-dashboard
+    # hermes writes why the gateway stopped after its banner into the volume only
+    "${COMPOSE[@]}" run --rm --no-deps --entrypoint cat first-start-config-rewriter /opt/data/logs/errors.log
     exit 1
 fi
 # the running gateway turns healthy from the HEALTHCHECK of the image, which
@@ -107,8 +109,13 @@ fi
 "${COMPOSE[@]}" rm -sf first-start-gateway first-start-dashboard first-start-config-rewriter > /dev/null 2>&1
 
 # a gateway stopped in the middle of its first install and started again on
-# the half-written volume gets through, as a restart by Swarm must
-echo "==> restart in the middle of the first install"
+# the half-written volume gets through, as a restart by Swarm must; the volume
+# carries the links into /tmp that the images up to 1.0.8 made of gateway.pid
+# and gateway.lock (regression: hermes refused the linked lock with «Too many
+# levels of symbolic links» and the gateway exited with code 1 after its banner)
+echo "==> restart in the middle of the first install, on a volume of 1.0.8"
+"${COMPOSE[@]}" run --rm --no-deps --entrypoint /bin/sh restart-gateway -c \
+    'ln -s /tmp/gateway.pid /opt/data/gateway.pid && ln -s /tmp/gateway.lock /opt/data/gateway.lock' || exit 1
 "${COMPOSE[@]}" up -d restart-gateway || exit 1
 DEADLINE=$((SECONDS + 600))
 until "${COMPOSE[@]}" logs --no-color restart-gateway 2>&1 | grep -qF "Installing the Hindsight memory provider" \
@@ -140,6 +147,16 @@ if [[ "${HEALTH}" == "healthy" ]]; then
     echo "PASS  gateway_healthy_without_dashboard"
 else
     echo "FAIL  gateway_healthy_without_dashboard: «${HEALTH}», last check: $(docker inspect --format '{{range .State.Health.Log}}{{.Output}}{{end}}' "${GATEWAY_ID}" 2>&1 | tail -n 3)"
+    "${COMPOSE[@]}" logs --no-color --tail 40 restart-gateway
+    exit 1
+fi
+# the running gateway holds its lock in a file of the volume, no longer in a
+# link into /tmp
+if "${COMPOSE[@]}" exec -T restart-gateway sh -c \
+        'test ! -L /opt/data/gateway.lock && test ! -L /opt/data/gateway.pid && test -f /opt/data/gateway.lock'; then
+    echo "PASS  links_of_1.0.8_replaced"
+else
+    echo "FAIL  links_of_1.0.8_replaced: $("${COMPOSE[@]}" exec -T restart-gateway ls -l /opt/data/gateway.lock /opt/data/gateway.pid 2>&1)"
     exit 1
 fi
 "${COMPOSE[@]}" rm -sf restart-gateway > /dev/null 2>&1

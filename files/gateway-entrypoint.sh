@@ -216,13 +216,13 @@ fi
 echo "Active config file: ${HERMES_HOME}/config.yaml"
 /opt/hermes/.venv/bin/python3 /check-isolation.py "${HERMES_HOME}/config.yaml"
 
-echo "==== Redirecting PID and Lock Files to /tmp ===="
-# gateway.pid and gateway.lock must not live in the persistent volume — stale
-# files from a previous container would block startup.  Symlink them into /tmp
-# (ephemeral, never persisted) so the volume only holds user data.
+echo "==== Removing PID and Lock Links of Images up to 1.0.8 ===="
+# hermes refuses a symlinked gateway.lock (O_NOFOLLOW) and clears stale gateway.pid and lock files itself (gateway/status.py)
 for f in gateway.pid gateway.lock; do
-  rm -f "${HERMES_HOME}/${f}"
-  ln -sf "/tmp/${f}" "${HERMES_HOME}/${f}"
+  if [ -L "${HERMES_HOME}/${f}" ]; then
+    rm -f "${HERMES_HOME}/${f}"
+    echo "removed the link ${HERMES_HOME}/${f}"
+  fi
 done
 
 echo "==== Starting Hermes Gateway ===="

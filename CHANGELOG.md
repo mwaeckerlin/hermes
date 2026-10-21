@@ -1,5 +1,8 @@
 # Changelog
 
+- 2026-10-22 **1.0.9**
+    - The gateway starts again with the current Hermes, which refuses a lock file that is a link: the gateway kept `gateway.pid` and `gateway.lock` as links into `/tmp` and stopped right after its start banner with exit code 1; both are files of the data volume now, a link left by an earlier image is removed on start, and Hermes itself clears the files a stopped container left behind
+
 - 2026-10-22 **1.0.8**
     - The model that compresses long conversations is a setting: `HERMES_COMPRESSION_MODEL` replaces it for every model provider, and without it each provider keeps the model it had
     - The ownership bootstrap of the data volume gets its user in the variables its image reads, `RUN_USER` and `RUN_GROUP`, where the stack passed a variable the image ignores; the owner stays the image's default user
