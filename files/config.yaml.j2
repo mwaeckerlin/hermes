@@ -122,27 +122,34 @@ auxiliary: {{ HERMES_AUXILIARY_YAML }}
 auxiliary:
   # ── Context compression ──────────────────────────────────────────────────
   compression:
+{% set compression_model = HERMES_COMPRESSION_MODEL | default('') %}
 {% if OPENROUTER_API_KEY | default('') %}
     provider: "main"
+{% if compression_model %}
+    model: {{ compression_model | tojson }}
+{% endif %}
 {% elif ANTHROPIC_API_KEY | default('') %}
     provider: "anthropic"
-    model: "claude-haiku-4-5"
+    model: {{ (compression_model or 'claude-haiku-4-5') | tojson }}
 {% elif GOOGLE_API_KEY | default('') or GEMINI_API_KEY | default('') %}
     provider: "gemini"
-    model: "gemini-2.0-flash"
+    model: {{ (compression_model or 'gemini-2.0-flash') | tojson }}
 {% elif OPENAI_API_KEY | default('') %}
     # "openai" is not a named Hermes provider — use custom-endpoint path.
     # o4-mini is used because Hermes routes auxiliary calls through the
     # Responses API which always includes reasoning.encrypted_content;
     # non-o-series models reject that with HTTP 400.
     base_url: "https://api.openai.com/v1"
-    model: "o4-mini"
+    model: {{ (compression_model or 'o4-mini') | tojson }}
 {% elif LITELLM_BASE_URL | default('') %}
     base_url: "{{ LITELLM_BASE_URL }}"
-    model: "{{ LITELLM_DEFAULT_MODEL | default('gpt-4o-mini') }}"
+    model: {{ (compression_model or LITELLM_DEFAULT_MODEL | default('gpt-4o-mini')) | tojson }}
     key_env: "LITELLM_API_KEY"
 {% else %}
     provider: "auto"
+{% if compression_model %}
+    model: {{ compression_model | tojson }}
+{% endif %}
 {% endif %}
   # ── Vision (image analysis, browser screenshots) ─────────────────────────
   # Defaults to the best vision-capable model for the active LLM provider.

@@ -13,8 +13,8 @@ services:
       # ── SSH key for sandbox (required) ─────────────────────────────────────
       HERMES_SANDBOX_SSH_PRIVATE_KEY:
       # ── Config control ─────────────────────────────────────────────────────
-      # Unset/true overwrites config.yaml from the template on startup.
-      # Set false to preserve manual edits in the hermes-data volume.
+      # Every setting is a variable of this file, rendered into config.yaml on
+      # each start (unset/true); false keeps the config.yaml of the volume.
       OVERWRITE_CONFIG:
       # Override auto-selected default model (e.g. "anthropic/claude-opus-4.6")
       HERMES_DEFAULT_MODEL:
@@ -141,6 +141,7 @@ services:
       HERMES_COMPRESSION_THRESHOLD:
       HERMES_COMPRESSION_TARGET_RATIO:
       HERMES_COMPRESSION_PROTECT_LAST_N:
+      HERMES_COMPRESSION_MODEL:
       HERMES_MEMORY_ENABLED:
       HERMES_USER_PROFILE_ENABLED:
       HERMES_MEMORY_CHAR_LIMIT:
@@ -309,7 +310,8 @@ services:
   allow-write-access:
     image: mwaeckerlin/allow-write-access
     environment:
-      ALLOW_USER: "chown -R 1000:1000"
+      RUN_USER: somebody
+      RUN_GROUP: somebody
     volumes:
       - hermes-data:/app
 

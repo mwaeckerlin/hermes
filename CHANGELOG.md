@@ -1,5 +1,10 @@
 # Changelog
 
+- 2026-10-22 **1.0.8**
+    - The model that compresses long conversations is a setting: `HERMES_COMPRESSION_MODEL` replaces it for every model provider, and without it each provider keeps the model it had
+    - The ownership bootstrap of the data volume gets its user in the variables its image reads, `RUN_USER` and `RUN_GROUP`, where the stack passed a variable the image ignores; the owner stays the image's default user
+    - The README describes the environment variables as the way to change a setting, with `OVERWRITE_CONFIG=false` to keep the configuration of the volume, where it described editing that file
+
 - 2026-10-19 **1.0.7**
     - The gateway turns healthy in Docker Swarm: its health check asked `/healthz`, which the API server of hermes does not serve, so Swarm stopped the gateway again and again; it asks `/health` now and prints the answer or what it waits for
     - The gateway creates the key of its API server in the data volume when none is given, as the upstream image does, so the API server and its health check run also without a dashboard on the volume

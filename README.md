@@ -457,6 +457,23 @@ Hermes uses a dedicated vision model to understand images sent in chat. Vision i
 | `HERMES_VISION_MODEL` | Override the auto-selected vision model (`auxiliary.vision.model`) |
 | `HERMES_AUXILIARY_YAML` | Override the entire `auxiliary:` section (compression + vision + web_extract) |
 
+### Context Compression Model
+
+Hermes compresses a long conversation with an auxiliary model (`auxiliary.compression`). Its provider follows the active LLM key; `HERMES_COMPRESSION_MODEL` replaces the model and keeps the provider:
+
+| Active key | Provider | Default model |
+|---|---|---|
+| `OPENROUTER_API_KEY` | `main` (the main model's provider) | — (the main model) |
+| `ANTHROPIC_API_KEY` | `anthropic` | `claude-haiku-4-5` |
+| `GOOGLE_API_KEY` / `GEMINI_API_KEY` | `gemini` | `gemini-2.0-flash` |
+| `OPENAI_API_KEY` | `https://api.openai.com/v1` | `o4-mini` |
+| `LITELLM_BASE_URL` | LiteLLM proxy | `LITELLM_DEFAULT_MODEL` (or `gpt-4o-mini`) |
+| none of them | `auto` | — |
+
+| Variable | Description |
+|---|---|
+| `HERMES_COMPRESSION_MODEL` | Model of the context compression (`auxiliary.compression.model`); unset: the default of the table |
+
 ### Web Search Backend
 
 Web tools auto-select a backend based on available API keys (priority: Firecrawl → Parallel → Tavily → Exa).
@@ -587,6 +604,7 @@ HERMES_PLATFORM_TOOLSETS_YAML='{"telegram":["web","terminal","file","skills","to
 | `HERMES_AGENT_VERBOSE` | `agent.verbose` | `false` |
 | `HERMES_COMPRESSION_ENABLED` | `compression.enabled` | `true` |
 | `HERMES_COMPRESSION_THRESHOLD` | `compression.threshold` | `0.50` |
+| `HERMES_COMPRESSION_MODEL` | `auxiliary.compression.model` | per provider (see [Context Compression Model](#context-compression-model)) |
 | `HERMES_MEMORY_ENABLED` | `memory.memory_enabled` | `true` |
 | `HERMES_USER_PROFILE_ENABLED` | `memory.user_profile_enabled` | `true` |
 | `HERMES_SESSION_RESET_MODE` | `session_reset.mode` | `both` |
@@ -626,19 +644,12 @@ HERMES_PLATFORM_TOOLSETS_YAML='{"telegram":["web","terminal","file","skills","to
 
 ### Config Persistence
 
-`config.yaml` is stored in the `hermes-data` Docker volume (`/opt/data`). On startup it is rendered from the template and written to the volume by default. This keeps template defaults such as disabled command approvals in sync with the container image.
+`config.yaml` is stored in the `hermes-data` Docker volume (`/opt/data`). On every start the gateway renders it from the template and the environment and writes it to the volume, so a setting is changed by setting its `HERMES_*` variable (see [Individual Setting Overrides](#configyaml--individual-setting-overrides)) or a whole section with `HERMES_<SECTION>_YAML` (see [Section-Level Overrides](#configyaml--section-level-overrides)) and restarting the gateway. The template defaults, such as disabled command approvals, stay in sync with the image the same way.
 
-To preserve manual edits in the volume:
+`OVERWRITE_CONFIG=false` keeps the `config.yaml` that is already in the volume and renders it only when the volume holds none; the rendered file then still lies beside it as `config.yaml.rendered`:
 
 ```bash
 OVERWRITE_CONFIG=false npm start
-```
-
-To edit `config.yaml` directly (advanced):
-
-```bash
-docker compose exec hermes-gateway cat /opt/data/config.yaml
-docker compose exec hermes-gateway vi /opt/data/config.yaml
 ```
 
 ## Docker-in-Docker

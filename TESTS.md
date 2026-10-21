@@ -62,6 +62,9 @@ The sandbox toolset and SSH behaviour are tested end to end in the [mwaeckerlin/
 - **F10** `tests/test_config_hindsight.py` — `memory.provider` from `HERMES_MEMORY_PROVIDER`, the shared bank as MCP server `hindsight-shared` beside the servers of `HERMES_MCP_SERVERS_YAML`, `hindsight/config.json` with `local_external` and `hybrid` by default and every `HINDSIGHT_*` setting from the environment, and never a key in it even when `HINDSIGHT_API_KEY` is set.
 - **F11** `tests/test_config_hindsight.py` › test_litellm_base_url_alone_selects_litellm — `LITELLM_BASE_URL` alone sets the model endpoint.
 - **F1** `tests/test_config_image_gen.py` — the gateway's config renderer omits, renders or replaces the `image_gen` section from the environment.
+- **F1** `tests/test_config_compression.py` › test_compression_model_defaults_per_provider: without `HERMES_COMPRESSION_MODEL`, `auxiliary.compression` of the rendered configuration is exactly today's section for OpenRouter, Anthropic, Google, Gemini, OpenAI, LiteLLM with and without `LITELLM_DEFAULT_MODEL`, and no key.
+- **F1** `tests/test_config_compression.py` › test_compression_model_from_the_environment: with `HERMES_COMPRESSION_MODEL` set, the same section carries that model for every provider and keeps everything else.
+- **F1** `tests/test_config_compression.py` › test_compression_model_cannot_inject_keys: a model value with quotes and a line break stays one string and adds no key to the section.
 - **F7** `tests/test_todo_storage.py` — the TODO store: persistence, claim, role-bound transitions, delete rules.
 
 ## Compose Contract
@@ -73,6 +76,7 @@ The sandbox toolset and SSH behaviour are tested end to end in the [mwaeckerlin/
 - **F4** `tests/compose-contract.sh` › dind_is_rootless_dockindock, docker_host_port_wired, dind_volume_on_data_root — the sandbox's `DOCKER_HOST` matches the rootless dind service and its port, storage sits on the daemon's real data path.
 - **F5** `tests/compose-contract.sh` › skills_copied — the GitHub MCP skill reaches the sandbox; the service URL is part of the rendered stack (compose_renders).
 - **F6** `tests/compose-contract.sh` › ownership_bootstrap_present — the ownership bootstrap service is part of the stack.
+- **F6** `tests/compose-contract.sh` › ownership_bootstrap_user_read: the ownership bootstrap service gets its user as `RUN_USER` and `RUN_GROUP`, the variables `mwaeckerlin/allow-write-access` reads, and no other variable.
 - **F8** `tests/compose-contract.sh` › deploy_pushes_every_built_image, workflow_calls_shared_build — `npm run deploy` pushes exactly the images the compose file builds, and `.github/workflows/docker.yml` calls the shared workflow; the tag and architecture selection of that workflow is tested by `tests/workflow-contract.sh` of `mwaeckerlin/scratch`.
 
 ## Frontend Unit

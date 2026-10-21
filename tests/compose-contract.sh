@@ -79,6 +79,17 @@ else
         _fail "ownership_bootstrap_present" "allow-write-access service missing"
     fi
 
+    # mwaeckerlin/allow-write-access reads RUN_USER and RUN_GROUP and nothing else
+    OWNER_ENV=$(docker compose config --format json | python3 -c '
+import json, sys
+env = json.load(sys.stdin)["services"]["allow-write-access"].get("environment") or {}
+print(" ".join(f"{k}={v}" for k, v in sorted(env.items())))')
+    if [[ "${OWNER_ENV}" == "RUN_GROUP=somebody RUN_USER=somebody" ]]; then
+        _pass "ownership_bootstrap_user_read"
+    else
+        _fail "ownership_bootstrap_user_read" "allow-write-access environment is '${OWNER_ENV}', expected RUN_USER and RUN_GROUP only"
+    fi
+
     if echo "${CONFIG}" | grep -q '9119'; then
         _pass "dashboard_port_published"
     else
