@@ -112,7 +112,7 @@ if serve "${SERVER}"; then
     FOLLOW_UP=""
     [[ -n "${SESSION}" ]] && FOLLOW_UP=$(delegate "${SERVER}" --session "${SESSION}" "Reply again with exactly: pong")
     if [[ "$(echo "${ANSWER}" | head -n 1)" == "pong" && -n "${SESSION}" && "${FOLLOW_UP}" == pong* ]] \
-        && docker logs "${STUB}" 2>&1 | grep -q "Reply again with exactly: pong"; then
+        && grep -q "Reply again with exactly: pong" <<< "$(docker logs "${STUB}" 2>&1)"; then
         _pass "task_delegated_and_answered"
     else
         _fail "task_delegated_and_answered" "answer: ${ANSWER}; follow-up: ${FOLLOW_UP}; server log: $(docker logs --tail 10 "${SERVER}" 2>&1)"

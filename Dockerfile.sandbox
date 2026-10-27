@@ -1,15 +1,12 @@
 # Everything shared between the agent sandboxes (full toolset, hardened
-# sshd, docker client) lives in mwaeckerlin/sandbox-base — this image only
-# adds the hermes skills and its entrypoint.
+# sshd, docker client, OpenCode) lives in mwaeckerlin/sandbox-base — this
+# image only adds the hermes skills and its entrypoint.
 FROM mwaeckerlin/mcp-github AS mcp_github_skills
-FROM mwaeckerlin/opencode:sandbox AS opencode
 
 FROM mwaeckerlin/sandbox-base AS build
 ENV CONTAINERNAME="hermes"
-# the OpenCode client and opencode-delegate: the agent hands development
-# tasks to the central OpenCode server and gets the answer back; the client
-# is the same OpenCode release the server image carries
-COPY --from=opencode /usr/local/bin/opencode /usr/local/bin/opencode
+# opencode-delegate: the agent hands a development task to the central OpenCode
+# server and gets the answer back; OpenCode itself comes with sandbox-base
 COPY --chmod=0755 files/opencode-delegate /usr/local/bin/opencode-delegate
 ADD files/SKILL.md /opt/hermes/skills/ssh-sandbox/SKILL.md
 ADD files/opencode-delegation/SKILL.md /opt/hermes/skills/opencode-delegation/SKILL.md

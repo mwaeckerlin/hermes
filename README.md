@@ -267,14 +267,23 @@ Any Docker Secret is automatically available — no explicit mapping required.
 
 ### Development with OpenCode
 
-The agent hands every software development task to the central [OpenCode](https://opencode.ai) server of the cluster, [mwaeckerlin/opencode](https://github.com/mwaeckerlin/opencode), which works in its own workspace and is tuned for exactly that. The sandbox carries the OpenCode client, taken from the image `mwaeckerlin/opencode:sandbox` so it matches the server's release, and the command `opencode-delegate "<task>"`, which the skill `opencode-delegation` tells the agent to use: it sends the task to OpenCode's HTTP API, waits until OpenCode is done, and prints the answer into the conversation, with the session id for a follow-up (`--session <id>`). `opencode run --attach` reaches the server as well, but in OpenCode 1.18 it prints no answer without a terminal.
+The agent hands every software development task to [OpenCode](https://opencode.ai), the coding agent, which the skill `opencode-delegation` tells it to use. OpenCode runs in two places:
+
+- **In the sandbox**, on the agent's own checkout, with the agent's tools and Docker. OpenCode comes with [mwaeckerlin/sandbox-base](https://github.com/mwaeckerlin/sandbox-base) and reaches the models of LiteLLM and the Hindsight memory banks through the service `hermes-opencode-gateway`, an instance of `mwaeckerlin/opencode:gateway`. The gateway holds the keys and adds them on the way, so the sandbox holds none. The agent runs `opencode run "<task>"` in the checkout; this is the default whenever `OPENCODE_GATEWAY_URL` is set.
+- **On the central OpenCode server** of the cluster, [mwaeckerlin/opencode](https://github.com/mwaeckerlin/opencode), in the server's own workspace, which the user follows in its web interface. The command `opencode-delegate "<task>"` sends the task to OpenCode's HTTP API, waits until OpenCode is done, and prints the answer into the conversation, with the session id for a follow-up (`--session <id>`). The agent takes this way when the user wants to follow or take over the work in the browser, or when no gateway is set. `opencode run --attach` reaches the server as well, but in OpenCode 1.18 it prints no answer without a terminal.
 
 | Variable | Required | Description |
 |---|---|---|
-| `HERMES_OPENCODE_URL` | no | URL of the OpenCode server (port 4096), e.g. `http://opencode-sandbox:4096`; set on the sandbox service, whose entrypoint exports it to `/etc/environment`; empty: no delegation |
+| `OPENCODE_GATEWAY_URL` | no | Gateway of the OpenCode in the sandbox, `http://hermes-opencode-gateway:8080` in the compose file; set on the sandbox service, whose entrypoint exports it to `/etc/environment`; empty: no OpenCode in the sandbox |
+| `OPENCODE_MODELS` | no | Comma separated model names of LiteLLM for the OpenCode in the sandbox, the first is the default; set on the sandbox service |
+| `HINDSIGHT_SHARED_BANK` | no | Memory bank shared by all agents, MCP server `hindsight-shared` of the OpenCode in the sandbox; set on the sandbox service; empty: none |
+| `HINDSIGHT_OWN_BANK` | no | Memory bank of this agent, MCP server `hindsight-own` of the OpenCode in the sandbox; set on the sandbox service; empty: none |
+| `HERMES_OPENCODE_URL` | no | URL of the central OpenCode server (port 4096), e.g. `http://opencode-sandbox:4096`; set on the sandbox service, whose entrypoint exports it to `/etc/environment`; empty: no delegation |
 | `HERMES_OPENCODE_TIMEOUT` | no | Seconds `opencode-delegate` waits for OpenCode's answer before it gives up with a message (default `7200`); set on the sandbox service like the URL |
 
-The sandbox reaches OpenCode directly, so it shares a network with the OpenCode server, and nothing else of the stack needs to. OpenCode's optional password (`OPENCODE_SERVER_PASSWORD_FILE` on the server) never belongs into the sandbox, because the agent could read it there. Without a password, whoever reaches port 4096 controls OpenCode, so the network between the sandboxes and OpenCode is joined by nothing else. Where that network is not closed, put a proxy in front of OpenCode that adds the password as HTTP basic auth (user `opencode`), and point `HERMES_OPENCODE_URL` at the proxy.
+The service `hermes-opencode-gateway` takes `LITELLM_URL` and `HINDSIGHT_URL` (defaults `http://litellm:4000` and `http://hindsight:8888`) and the key files `LITELLM_API_KEY_FILE` and `HINDSIGHT_API_KEY_FILE`, Docker secrets of its own; it shares the network `sandbox-opencode-gateway` with the sandbox and nothing else.
+
+The sandbox reaches the central server directly, so it shares a network with it, and nothing else of the stack needs to. OpenCode's optional password (`OPENCODE_SERVER_PASSWORD_FILE` on the server) never belongs into the sandbox, because the agent could read it there. Without a password, whoever reaches port 4096 controls OpenCode, so the network between the sandboxes and OpenCode is joined by nothing else. Where that network is not closed, put a proxy in front of OpenCode that adds the password as HTTP basic auth (user `opencode`), and point `HERMES_OPENCODE_URL` at the proxy.
 
 ### LLM Providers
 
@@ -463,12 +472,12 @@ Hermes compresses a long conversation with an auxiliary model (`auxiliary.compre
 
 | Active key | Provider | Default model |
 |---|---|---|
-| `OPENROUTER_API_KEY` | `main` (the main model's provider) | — (the main model) |
+| `OPENROUTER_API_KEY` | `main` (the main model's provider) | — (the main model) |
 | `ANTHROPIC_API_KEY` | `anthropic` | `claude-haiku-4-5` |
 | `GOOGLE_API_KEY` / `GEMINI_API_KEY` | `gemini` | `gemini-2.0-flash` |
 | `OPENAI_API_KEY` | `https://api.openai.com/v1` | `o4-mini` |
 | `LITELLM_BASE_URL` | LiteLLM proxy | `LITELLM_DEFAULT_MODEL` (or `gpt-4o-mini`) |
-| none of them | `auto` | — |
+| none of them | `auto` | — |
 
 | Variable | Description |
 |---|---|
@@ -680,7 +689,7 @@ npm test           # builds the images, then runs the whole suite
 npm run build:doc  # regenerate the diagrams in doc/ from this README
 ```
 
-`npm test` runs the register guard (`tests/docs-contract.sh`), the frontend tests of the TODO and pairing plugins, the Python tests inside an image built from the gateway image (`test/docker-compose.yml`: config rendering, TODO storage and API, pairing API, a LiteLLM request without a key), the Hindsight memory end to end against a real Hindsight server, once behind a key-adding proxy and once with the key in the gateway (`tests/run-e2e.sh`), the isolation end to end that lets the real agent search for planted secrets (`tests/run-isolation.sh`), the OpenCode delegation (`tests/opencode-delegation.sh`), and the compose wiring contract (`tests/compose-contract.sh`). Every test runs against the built images, so `npm test` builds them first.
+`npm test` runs the register guard (`tests/docs-contract.sh`), the frontend tests of the TODO and pairing plugins, the Python tests inside an image built from the gateway image (`test/docker-compose.yml`: config rendering, TODO storage and API, pairing API, a LiteLLM request without a key), the Hindsight memory end to end against a real Hindsight server, once behind a key-adding proxy and once with the key in the gateway (`tests/run-e2e.sh`), the isolation end to end that lets the real agent search for planted secrets (`tests/run-isolation.sh`), the OpenCode delegation (`tests/opencode-delegation.sh`), OpenCode in the sandbox through its gateway (`tests/opencode-local.sh`), and the compose wiring contract (`tests/compose-contract.sh`). Every test runs against the built images, so `npm test` builds them first.
 
 The Hindsight server of the end-to-end test logs one warning that belongs to its own image: its reranker model `cross-encoder/ms-marco-MiniLM-L-6-v2` ships misaligned tensors, which Hindsight copies out of memory-mapped storage at start so its scores stay correct. Nothing in this repository causes or can remove it. The dashboard's own init, s6, logs `s6-rc: warning: service s6rc-oneshot-runner is marked as essential, not stopping it` whenever its container stops, which the isolation test does once to restart the dashboard and once at the end. Every other warning fails the run.
 

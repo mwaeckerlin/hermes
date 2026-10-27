@@ -38,7 +38,9 @@ echo "PASS  gateway_memory_status"
 _wait_gateway_start() {
     local service="$1" deadline=$((SECONDS + $2)) id state
     while [[ ${SECONDS} -lt ${deadline} ]]; do
-        if "${COMPOSE[@]}" logs --no-color "${service}" 2>&1 | grep -qF "Hermes Gateway Starting"; then
+        # the whole log first: grep -q stops at the match, the logs command then
+        # dies on a closed pipe, and pipefail would count the match as a miss
+        if grep -qF "Hermes Gateway Starting" <<< "$("${COMPOSE[@]}" logs --no-color "${service}" 2>&1)"; then
             echo "started"
             return 0
         fi
@@ -118,7 +120,7 @@ echo "==> restart in the middle of the first install, on a volume of 1.0.8"
     'ln -s /tmp/gateway.pid /opt/data/gateway.pid && ln -s /tmp/gateway.lock /opt/data/gateway.lock' || exit 1
 "${COMPOSE[@]}" up -d restart-gateway || exit 1
 DEADLINE=$((SECONDS + 600))
-until "${COMPOSE[@]}" logs --no-color restart-gateway 2>&1 | grep -qF "Installing the Hindsight memory provider" \
+until grep -qF "Installing the Hindsight memory provider" <<< "$("${COMPOSE[@]}" logs --no-color restart-gateway 2>&1)" \
         || [[ ${SECONDS} -ge ${DEADLINE} ]]; do
     sleep 2
 done

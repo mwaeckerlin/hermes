@@ -264,6 +264,13 @@ services:
       HERMES_OPENCODE_URL:
       # seconds opencode-delegate waits for OpenCode's answer (default 7200)
       HERMES_OPENCODE_TIMEOUT:
+      # OpenCode in this sandbox, on the agent's own checkout: the gateway that
+      # adds the keys, the LiteLLM models (the first is the default) and the
+      # memory banks; empty OPENCODE_GATEWAY_URL: no local OpenCode
+      OPENCODE_GATEWAY_URL: http://hermes-opencode-gateway:8080
+      OPENCODE_MODELS:
+      HINDSIGHT_SHARED_BANK:
+      HINDSIGHT_OWN_BANK:
     volumes:
       - hermes-workspace:/home/somebody
     security_opt:
@@ -279,6 +286,24 @@ services:
       - gateway-sandbox
       - sandbox-dind
       - sandbox-mcp-github
+      - sandbox-opencode-gateway
+
+  hermes-opencode-gateway:
+    # the only container that holds the keys OpenCode in the sandbox uses:
+    # it forwards /v1/… to LiteLLM and /mcp/<bank>/… to Hindsight and sets the
+    # key on the way (see mwaeckerlin/opencode)
+    image: mwaeckerlin/opencode:gateway
+    environment:
+      LITELLM_URL:
+      HINDSIGHT_URL:
+      # files holding the keys, Docker secrets; empty: the upstream takes none
+      LITELLM_API_KEY_FILE:
+      HINDSIGHT_API_KEY_FILE:
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    networks:
+      - sandbox-opencode-gateway
 
   hermes-dind:
     # rootless docker-in-docker (mwaeckerlin base image instead of the
@@ -326,6 +351,7 @@ networks:
     #   encrypted: "true"
   sandbox-dind:
   sandbox-mcp-github:
+  sandbox-opencode-gateway:
 
 volumes:
   hermes-data:

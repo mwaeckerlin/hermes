@@ -1,5 +1,10 @@
 # Changelog
 
+- 2026-10-27 **1.0.10**
+    - The agent develops with OpenCode in its own sandbox, on its own checkout, with its tools and its Docker: OpenCode comes with `mwaeckerlin/sandbox-base` and reaches LiteLLM and Hindsight through the new service `hermes-opencode-gateway`, which holds the keys; the sandbox takes `OPENCODE_GATEWAY_URL`, `OPENCODE_MODELS`, `HINDSIGHT_SHARED_BANK` and `HINDSIGHT_OWN_BANK`
+    - The central OpenCode server stays for the work the user follows or takes over in the browser; the skill `opencode-delegation` says which of the two takes a task
+    - The tests search a container log only after reading it whole: a search that stopped at the first match ended the log command early, and with `pipefail` the match counted as a miss
+
 - 2026-10-22 **1.0.9**
     - The gateway starts again with the current Hermes, which refuses a lock file that is a link: the gateway kept `gateway.pid` and `gateway.lock` as links into `/tmp` and stopped right after its start banner with exit code 1; both are files of the data volume now, a link left by an earlier image is removed on start, and Hermes itself clears the files a stopped container left behind
 

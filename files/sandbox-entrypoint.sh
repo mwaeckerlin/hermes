@@ -40,6 +40,13 @@ fi
 if [ -n "${HERMES_OPENCODE_TIMEOUT:-}" ]; then
   echo "HERMES_OPENCODE_TIMEOUT=${HERMES_OPENCODE_TIMEOUT}" >> /etc/environment
 fi
+# OpenCode in the sandbox reaches the model and the memory through its gateway,
+# which adds the keys; the sandbox gets the address and the names, never a key
+for name in OPENCODE_GATEWAY_URL OPENCODE_MODELS HINDSIGHT_SHARED_BANK HINDSIGHT_OWN_BANK; do
+  if [ -n "${!name:-}" ]; then
+    echo "${name}=${!name}" >> /etc/environment
+  fi
+done
 chown -R "${RUN_USER}:${RUN_GROUP}" "${RUN_HOME}"
 chmod 750 "${RUN_HOME}"
 chmod 700 "${RUN_HOME}/.ssh"

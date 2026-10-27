@@ -55,6 +55,16 @@ The sandbox toolset and SSH behaviour are tested end to end in the [mwaeckerlin/
 - **F14** `tests/opencode-delegation.sh` › task_delegated_and_answered: `opencode-delegate` hands a task to the OpenCode server, prints the answer and the session id, and continues that session with a follow-up that reaches OpenCode's model.
 - **F14** `tests/opencode-delegation.sh` › password_server_refuses_sandbox: a server with `OPENCODE_SERVER_PASSWORD` refuses the sandbox, which holds no password, with HTTP 401 and a clear message, and answers a client that has the password.
 
+## OpenCode in the Sandbox
+
+`npm run test:opencode` also runs `tests/opencode-local.sh` against the built sandbox image: the stack `tests/opencode-local.yml` starts the sandbox, the real OpenCode gateway with a test key and the recording model endpoint of `tests/openai-stub.cjs` in the place of LiteLLM.
+
+- **F15** `tests/opencode-local.sh` › gateway_and_models_reach_the_agent — the sandbox, started through its real entrypoint, writes `OPENCODE_GATEWAY_URL`, `OPENCODE_MODELS`, `HINDSIGHT_SHARED_BANK` and `HINDSIGHT_OWN_BANK` into `/etc/environment` for the agent's SSH sessions.
+- **F15** `tests/opencode-local.sh` › memory_banks_through_the_gateway — in such a session, the configuration of OpenCode names both memory banks as MCP servers on the gateway.
+- **F15** `tests/opencode-local.sh` › local_task_answered_through_the_gateway — in such a session, `opencode run` in a fresh git checkout prints the answer of the model, which received the key of the real `mwaeckerlin/opencode:gateway` and never the placeholder the sandbox sent.
+- **F15** `tests/opencode-local.sh` › no_key_in_sandbox — the key of the gateway stands neither in the environment of the sandbox, nor in the configuration of OpenCode, nor in a file of the sandbox.
+- **F15** `tests/compose-contract.sh` › local_opencode_through_its_gateway, opencode_from_sandbox_base — the sandbox names `http://hermes-opencode-gateway:8080`, shares a network of its own with that gateway, which runs `mwaeckerlin/opencode:gateway`, carries no key variable, and takes OpenCode from `mwaeckerlin/sandbox-base`.
+
 ## Data Flow
 
 - **F12** `tests/test_isolation_check.py`: the gateway's start check passes the default configuration and MCP servers reached by `url`, and refuses `terminal.env_passthrough`, `terminal.credential_files` and an MCP server with `command`.
