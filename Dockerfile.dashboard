@@ -26,4 +26,8 @@ COPY --chown=hermes:hermes --from=todo-plugin-builder /app/dist/index.js /opt/he
 # Docker secrets become the dashboard's variables before it starts, so the
 # login can come from secrets without a wrapper in front of s6
 COPY --chmod=0755 files/dashboard-secrets.sh /etc/cont-init.d/03-docker-secrets
+# HERMES_BASE_PATH: the dashboard serves below a path of its own (README,
+# Base Path Mechanism); the build stops when upstream changed what it uses
+COPY files/base-path/hermes_base_path.py files/base-path/install-hook.py /opt/hermes-base-path/
+RUN /opt/hermes/.venv/bin/python3 /opt/hermes-base-path/install-hook.py /opt/hermes /opt/hermes-base-path "${HERMES_WEB_DIST}"
 ENV HERMES_HOME=/opt/data

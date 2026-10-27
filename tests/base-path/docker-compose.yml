@@ -1,0 +1,67 @@
+# End-to-end stack of tests/run-base-path.sh. The network is internal: the
+# dashboard reaches nothing outside the stack. The login is a test value of
+# this run only, handed over as Docker secrets as in a swarm.
+name: hermes-base-path
+
+services:
+  # below the base path /hermes, the way the deployment runs it
+  dashboard:
+    image: mwaeckerlin/hermes:dashboard
+    command: ["dashboard", "--host", "0.0.0.0"]
+    environment:
+      HERMES_HOME: /opt/data
+      HERMES_BASE_PATH: /hermes
+      HERMES_DASHBOARD_BASIC_AUTH_USERNAME: base-path-admin
+    secrets:
+      - hermes_dashboard_basic_auth_password
+      - hermes_dashboard_basic_auth_secret
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - e2e
+
+  # the same image without a base path, at the root as before
+  dashboard-root:
+    image: mwaeckerlin/hermes:dashboard
+    command: ["dashboard", "--host", "0.0.0.0"]
+    environment:
+      HERMES_HOME: /opt/data
+      HERMES_DASHBOARD_BASIC_AUTH_USERNAME: base-path-admin
+    secrets:
+      - hermes_dashboard_basic_auth_password
+      - hermes_dashboard_basic_auth_secret
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - e2e
+
+  # Traefik with the route of the deployment: PathPrefix(`/hermes`), no StripPrefix
+  proxy:
+    build: proxy
+    image: mwaeckerlin/hermes-base-path-proxy
+    user: "65534:65534"
+    networks:
+      - e2e
+
+  # Chromium through the proxy below /hermes, and at the root without a base path
+  browser:
+    build: browser
+    image: mwaeckerlin/hermes-base-path-browser
+    environment:
+      PROXY_URL: http://proxy:8080
+      PREFIX: /hermes
+      ROOT_URL: http://dashboard-root:9119
+      DASHBOARD_USERNAME: base-path-admin
+      DASHBOARD_PASSWORD: ${BASE_PATH_DASHBOARD_PASSWORD:-}
+    networks:
+      - e2e
+
+secrets:
+  hermes_dashboard_basic_auth_password:
+    environment: BASE_PATH_DASHBOARD_PASSWORD
+  hermes_dashboard_basic_auth_secret:
+    environment: BASE_PATH_DASHBOARD_SECRET
+
+networks:
+  e2e:
+    internal: true

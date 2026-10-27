@@ -1,0 +1,14 @@
+# The route of the deployment: everything below /hermes reaches the dashboard
+# with the path unchanged, without StripPrefix and without a redirect of the
+# proxy; nothing else is routed.
+http:
+  routers:
+    hermes:
+      rule: "PathPrefix(`/hermes`)"
+      entryPoints: [web]
+      service: hermes
+  services:
+    hermes:
+      loadBalancer:
+        servers:
+          - url: "http://dashboard:9119"

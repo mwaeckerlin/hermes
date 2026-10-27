@@ -239,6 +239,9 @@ services:
       HERMES_DASHBOARD_BASIC_AUTH_PASSWORD_HASH:
       HERMES_DASHBOARD_BASIC_AUTH_PASSWORD:
       HERMES_DASHBOARD_BASIC_AUTH_SECRET:
+      # path below which the dashboard serves, e.g. /hermes behind a proxy that
+      # forwards the path unchanged; empty: at the root
+      HERMES_BASE_PATH:
     volumes:
       - hermes-data:/opt/data
     ports:
@@ -269,6 +272,7 @@ services:
       # memory banks; empty OPENCODE_GATEWAY_URL: no local OpenCode
       OPENCODE_GATEWAY_URL: http://hermes-opencode-gateway:8080
       OPENCODE_MODELS:
+      OPENCODE_SMALL_MODEL:
       HINDSIGHT_SHARED_BANK:
       HINDSIGHT_OWN_BANK:
     volumes:

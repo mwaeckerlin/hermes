@@ -110,6 +110,16 @@ print(" ".join(f"{k}={v}" for k, v in sorted(env.items())))')
         _fail "ownership_bootstrap_user_read" "allow-write-access environment is '${OWNER_ENV}', expected RUN_USER and RUN_GROUP only"
     fi
 
+    BASE_PATH=$(docker compose config --format json | python3 -c '
+import json, sys
+services = json.load(sys.stdin)["services"]
+print(" ".join(sorted(n for n, s in services.items() if "HERMES_BASE_PATH" in (s.get("environment") or {}))))')
+    if [[ "${BASE_PATH}" == "hermes-dashboard" ]]; then
+        _pass "dashboard_base_path_passed"
+    else
+        _fail "dashboard_base_path_passed" "HERMES_BASE_PATH reaches '${BASE_PATH}', expected the dashboard alone"
+    fi
+
     if echo "${CONFIG}" | grep -q '9119'; then
         _pass "dashboard_port_published"
     else

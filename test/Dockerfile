@@ -12,6 +12,7 @@ RUN mkdir -p /work/files/todo-plugin /work/files/pairing-plugin /work/home \
  && cp /check-isolation.py /work/files/check-isolation.py
 COPY --from=mwaeckerlin/hermes:dashboard /opt/hermes/plugins/todo/dashboard/api.py /opt/hermes/plugins/todo/dashboard/storage.py /work/files/todo-plugin/
 COPY --from=mwaeckerlin/hermes:dashboard /opt/hermes/plugins/pairing/dashboard/api.py /work/files/pairing-plugin/
+COPY --from=mwaeckerlin/hermes:dashboard /opt/hermes-base-path/hermes_base_path.py /opt/hermes-base-path/install-hook.py /work/files/base-path/
 # the hermes virtualenv carries no pip, and uv is a package of hermes' own
 # package manager, off the PATH; pm.uv_launcher names its binary
 RUN cd /opt/hermes \

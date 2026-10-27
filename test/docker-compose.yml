@@ -9,7 +9,7 @@ services:
       context: ..
       dockerfile: test/Dockerfile
     image: hermes-test
-    command: ["tests", "--ignore=tests/e2e", "--ignore=tests/e2e_key", "--ignore=tests/isolation"]
+    command: ["tests", "--ignore=tests/e2e", "--ignore=tests/e2e_key", "--ignore=tests/isolation", "--ignore=tests/base-path"]
     network_mode: none
 
   # Hindsight memory end to end: a real Hindsight server that demands a key,

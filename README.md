@@ -259,6 +259,41 @@ Any Docker Secret is automatically available — no explicit mapping required.
 | `HERMES_SANDBOX_SSH_PUBLIC_KEY` | **yes** | Ed25519 public key for sandbox SSH access |
 | `HERMES_SANDBOX_SSH_PRIVATE_KEY` | **yes** | Private key (`\n`-encoded), gateway → sandbox |
 
+### Dashboard Below a Base Path
+
+The dashboard serves at the root of its address, or below a path of its own such as `https://swarm-01/hermes/` when `HERMES_BASE_PATH` is set. The image itself serves everything below that path: the page, the assets, the plugins, every API call, the websockets and its redirects. The reverse proxy forwards the path unchanged, with no StripPrefix and no rewriting of pages or bundles.
+
+| Variable | Default | Description |
+|---|---|---|
+| `HERMES_BASE_PATH` | *(empty)* | Path below which the dashboard serves, such as `/hermes`; empty or `/` serves at the root. Set on the dashboard service |
+
+A swarm service below `/hermes` behind Traefik:
+
+```yaml
+services:
+  hermes-dashboard:
+    image: mwaeckerlin/hermes:dashboard
+    command: ["dashboard", "--host", "0.0.0.0"]
+    environment:
+      HERMES_HOME: /opt/data
+      HERMES_BASE_PATH: /hermes
+      HERMES_DASHBOARD_BASIC_AUTH_USERNAME: admin
+    secrets:
+      - hermes_dashboard_basic_auth_password_hash
+      - hermes_dashboard_basic_auth_secret
+    volumes:
+      - hermes-data:/opt/data
+    deploy:
+      labels:
+        traefik.enable: "true"
+        traefik.http.routers.hermes.rule: PathPrefix(`/hermes`)
+        traefik.http.services.hermes.loadbalancer.server.port: "9119"
+```
+
+The proxy routes the path and nothing else: no `stripprefix` middleware, no redirect of its own. The image answers the bare path `/hermes` with a redirect to `/hermes/`. A header `X-Forwarded-Prefix` that a client or a proxy sends is dropped, the image alone decides the prefix. A request outside the base path, which only reaches the dashboard's own port 9119, is served at the root as before, for the dashboard's own self-test and for clients inside the container.
+
+The start stops with a message that names the variable when `HERMES_BASE_PATH` is no path of letters, digits and `. _ ~ -` segments with a leading slash, such as `hermes`, `/a b` or `/x/../y`.
+
 ### MCP GitHub Routing (Sandbox)
 
 | Variable | Required | Description |
@@ -276,6 +311,7 @@ The agent hands every software development task to [OpenCode](https://opencode.a
 |---|---|---|
 | `OPENCODE_GATEWAY_URL` | no | Gateway of the OpenCode in the sandbox, `http://hermes-opencode-gateway:8080` in the compose file; set on the sandbox service, whose entrypoint exports it to `/etc/environment`; empty: no OpenCode in the sandbox |
 | `OPENCODE_MODELS` | no | Comma separated model names of LiteLLM for the OpenCode in the sandbox, the first is the default; set on the sandbox service |
+| `OPENCODE_SMALL_MODEL` | no | Model name of LiteLLM for small tasks of the OpenCode in the sandbox, such as session titles; set on the sandbox service; empty: OpenCode chooses |
 | `HINDSIGHT_SHARED_BANK` | no | Memory bank shared by all agents, MCP server `hindsight-shared` of the OpenCode in the sandbox; set on the sandbox service; empty: none |
 | `HINDSIGHT_OWN_BANK` | no | Memory bank of this agent, MCP server `hindsight-own` of the OpenCode in the sandbox; set on the sandbox service; empty: none |
 | `HERMES_OPENCODE_URL` | no | URL of the central OpenCode server (port 4096), e.g. `http://opencode-sandbox:4096`; set on the sandbox service, whose entrypoint exports it to `/etc/environment`; empty: no delegation |
@@ -689,7 +725,7 @@ npm test           # builds the images, then runs the whole suite
 npm run build:doc  # regenerate the diagrams in doc/ from this README
 ```
 
-`npm test` runs the register guard (`tests/docs-contract.sh`), the frontend tests of the TODO and pairing plugins, the Python tests inside an image built from the gateway image (`test/docker-compose.yml`: config rendering, TODO storage and API, pairing API, a LiteLLM request without a key), the Hindsight memory end to end against a real Hindsight server, once behind a key-adding proxy and once with the key in the gateway (`tests/run-e2e.sh`), the isolation end to end that lets the real agent search for planted secrets (`tests/run-isolation.sh`), the OpenCode delegation (`tests/opencode-delegation.sh`), OpenCode in the sandbox through its gateway (`tests/opencode-local.sh`), and the compose wiring contract (`tests/compose-contract.sh`). Every test runs against the built images, so `npm test` builds them first.
+`npm test` runs the register guard (`tests/docs-contract.sh`), the frontend tests of the TODO and pairing plugins, the Python tests inside an image built from the gateway image (`test/docker-compose.yml`: config rendering, TODO storage and API, pairing API, a LiteLLM request without a key, the base path parsing, routing and hook), the Hindsight memory end to end against a real Hindsight server, once behind a key-adding proxy and once with the key in the gateway (`tests/run-e2e.sh`), the dashboard below `/hermes` behind Traefik without StripPrefix and the same image at the root, on a network without internet access, with Chromium signing in and checking that every request of the page stays below `/hermes` (`tests/run-base-path.sh`), the isolation end to end that lets the real agent search for planted secrets (`tests/run-isolation.sh`), the OpenCode delegation (`tests/opencode-delegation.sh`), OpenCode in the sandbox through its gateway (`tests/opencode-local.sh`), and the compose wiring contract (`tests/compose-contract.sh`). Every test runs against the built images, so `npm test` builds them first.
 
 The Hindsight server of the end-to-end test logs one warning that belongs to its own image: its reranker model `cross-encoder/ms-marco-MiniLM-L-6-v2` ships misaligned tensors, which Hindsight copies out of memory-mapped storage at start so its scores stay correct. Nothing in this repository causes or can remove it. The dashboard's own init, s6, logs `s6-rc: warning: service s6rc-oneshot-runner is marked as essential, not stopping it` whenever its container stops, which the isolation test does once to restart the dashboard and once at the end. Every other warning fails the run.
 
@@ -709,3 +745,14 @@ The stack builds three images, `mwaeckerlin/hermes:gateway`, `mwaeckerlin/hermes
 | `gateway-1.0.2-20260926` | never |
 
 The version is the one in `package.json`. The repository needs the secret `DOCKERHUB_TOKEN`, a Docker Hub access token with read and write.
+
+## Internals
+
+### Base Path Mechanism
+
+Upstream already serves the dashboard below a path when a proxy strips that path and names it in the header `X-Forwarded-Prefix`: the server writes the prefix into the page as `window.__HERMES_BASE_PATH__`, into the asset URLs of the page and the stylesheets, into the login page, the cookie paths and its redirects, and the browser bundle builds every API call, websocket, plugin URL and route from it. The image takes the place of that proxy, and changes one line of the bundle:
+
+- **Hook** (`files/base-path/hermes_base_path.py`): the file `hermes-base-path.pth` in the site-packages of the hermes virtualenv calls `install()` at the start of every Python process of the virtualenv. Without `HERMES_BASE_PATH` it returns at once. With it, it waits for the import of `uvicorn.config` and wraps `Config.load`, which resolves the application uvicorn serves, so the dashboard's server serves through `BasePathApp`; a wrong value stops the start there with the message.
+- **Requests** (`BasePathApp`, an ASGI application): every HTTP request and websocket below the base path reaches the dashboard without the base path and with `X-Forwarded-Prefix` set to it; the client's own header of that name is dropped. A root-absolute `Location`, or one on the host of the request, that does not lie below the base path gets it in front. The bare path is answered with a redirect to its slash form. Requests outside the base path reach the dashboard unchanged.
+- **Preload helper** (the dashboard bundle in `$HERMES_WEB_DIST/assets`): upstream builds its bundle with Vite for the base `/`. A page the dashboard loads on demand, such as Pairing, is imported relative to its chunk and lands below the base path, but Vite's preload helper first preloads the page and its dependencies from `"/" + file`, its `assetsURL` function, which `X-Forwarded-Prefix` does not reach. The build replaces that function with one that puts `window.__HERMES_BASE_PATH__`, the prefix the page carries, in front; at the root that value is empty and the URLs stay as before.
+- **Build check** (`files/base-path/install-hook.py`, run by `Dockerfile.dashboard`): counts the texts of upstream the mechanism relies on, the reading of `X-Forwarded-Prefix` and the prefix written into the page and into the login redirect, and stops the build with the file and the text when upstream changed them. It patches the preload helper only when the scripts of the bundle carry it exactly once, and otherwise stops the build with the count and the files. It then installs the `.pth` file and starts a fresh Python of the virtualenv once with and once without `HERMES_BASE_PATH`, to check that uvicorn serves through `BasePathApp` in the first case only.

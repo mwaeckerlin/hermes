@@ -1,5 +1,9 @@
 # Changelog
 
+- 2026-10-27 **1.0.11**
+    - The dashboard serves below a path of its own, such as `/hermes`, set with `HERMES_BASE_PATH`: the page, the assets, the pages loaded on demand such as Pairing with their dependencies, the plugin tabs, every API call, the websockets and the redirects lie below it, and the reverse proxy forwards the path unchanged, with no StripPrefix and no rewriting; unset, the dashboard serves at the root as before, and a malformed path stops its start with a message that names the variable
+    - The sandbox passes `OPENCODE_SMALL_MODEL` to the OpenCode of the agent, the model of LiteLLM for small tasks such as session titles
+
 - 2026-10-27 **1.0.10**
     - The agent develops with OpenCode in its own sandbox, on its own checkout, with its tools and its Docker: OpenCode comes with `mwaeckerlin/sandbox-base` and reaches LiteLLM and Hindsight through the new service `hermes-opencode-gateway`, which holds the keys; the sandbox takes `OPENCODE_GATEWAY_URL`, `OPENCODE_MODELS`, `HINDSIGHT_SHARED_BANK` and `HINDSIGHT_OWN_BANK`
     - The central OpenCode server stays for the work the user follows or takes over in the browser; the skill `opencode-delegation` says which of the two takes a task
